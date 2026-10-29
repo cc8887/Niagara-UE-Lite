@@ -48,3 +48,8 @@ The portable frontend normally uses only `backend/Engine`, `Project` and
 `runtime-template` beside itself. Developer-only overrides are
 `NIAGARA_LITE_ENGINE`, `NIAGARA_LITE_PROJECT` and
 `NIAGARA_LITE_RUNTIME_TEMPLATE`; clear them for standalone qualification.
+
+The smaller production profile, Linux no-CEF module rebuild, symbol stripping,
+library deduplication and edit/render acceptance are described in
+[slimming.md](slimming.md). Rebuild or slim only into a new output tree; preserve
+published bundles until the replacement passes extracted-package validation.

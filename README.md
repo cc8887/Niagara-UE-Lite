@@ -7,6 +7,11 @@ UE 5.8.1 原生 Niagara standalone CLI：创建、读取、编辑、编译、保
 使用者无需另装 UE、Python 或 C++ SDK。生成的纯 Runtime 预览目录不包含编辑器。
 Windows 使用 D3D12/SM6；Linux 使用 Vulkan/SM6。
 
+精简发行包移除 CEF、可选图形调试层和外置符号/静态库，剥离 Linux ELF 中的
+非必要符号并对相同库去重。Linux 的 WebBrowser / CEF3Utils 从匹配源码重新
+编译为 `WITH_CEF3=0`，解除对 Chromium 的硬依赖。Cook 导出的运行目录会补齐
+共享 DLL，保持独立可用。构建边界与验收方式见 [slimming.md](docs/slimming.md)。
+
 这是编辑功能的 CLI，不包含 Niagara 图形编辑窗口。不是完全去除 UnrealEd 的
 引擎重构；模块边界见 [architecture.md](docs/architecture.md)。
 

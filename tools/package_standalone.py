@@ -104,17 +104,23 @@ exec "$PYTHONHOME/bin/python3" "$ROOT/scripts/niagara_cli.py" "$@"
     (dest.parent/(NAME+'-file-list.json')).write_text(json.dumps(files,indent=2))
 
 def seal(dest,make_archive,private_roots):
-    files=json.loads((dest.parent/(NAME+'-file-list.json')).read_text());records=[]
+    files=json.loads((dest.parent/(NAME+'-file-list.json')).read_text());records=[];inodes={};stored_bytes=0
     needles=[s.encode(enc) for s in private_roots if len(s)>3 for enc in ('utf-8','utf-16le','utf-32le')]
     for rel in files:
         p=dest/rel
+        if not p.resolve().is_relative_to(dest.resolve()):raise ValueError('Package path escapes root')
         if generated_path(p,dest):raise ValueError('Generated scratch path in package list: '+rel)
         data=p.read_bytes()
         if any(n in data for n in needles):raise ValueError('Private build path remains in '+rel)
-        records.append({'path':rel,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
+        record={'path':rel,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+        stat=p.stat();identity=(stat.st_dev,stat.st_ino)
+        if not WIN and identity in inodes:record['hardlinkTo']=inodes[identity]
+        else:inodes[identity]=rel;stored_bytes+=len(data)
+        records.append(record)
     manifest={'schema':'ue-niagara-standalone/1','engine':'UE5.8.1','platform':PLATFORM,
               'editorInstallationRequired':False,'includesUnrealEd':True,'includesNiagaraEditor':True,
-              'cppSdkRequired':False,'runtimeWithEditor':False,'payloadBytes':sum(r['bytes'] for r in records),'records':records}
+              'cppSdkRequired':False,'runtimeWithEditor':False,'payloadBytes':sum(r['bytes'] for r in records),
+              'storedPayloadBytes':stored_bytes,'hardlinkedFiles':sum('hardlinkTo' in r for r in records),'records':records}
     (dest/'package-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     summary={k:v for k,v in manifest.items() if k!='records'};summary['files']=len(files)+1
     if make_archive:

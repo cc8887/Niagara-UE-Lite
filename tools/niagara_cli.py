@@ -40,6 +40,26 @@ def copy_file(source,destination):
     shutil.copymode(source,destination)
     return result
 
+def copy_runtime_template(template,output):
+    shutil.copytree(template,output,copy_function=copy_file)
+    # The Windows kit stores shared DLLs once in the backend. Materialize every
+    # runtime path so exported previews remain independent of the authoring kit.
+    links=ROOT/'runtime-template-links.json'
+    if template.resolve()!=(ROOT/'runtime-template').resolve() or not links.exists():return
+    mapping=load_json(links)
+    if mapping.get('schema')!='niagara-runtime-template-links/1':
+        raise ValueError('Unsupported runtime template link manifest')
+    for record in mapping['files']:
+        source=(ROOT/record['source']).resolve();destination=(output/record['path']).resolve()
+        if not source.is_relative_to(ROOT.resolve()) or not destination.is_relative_to(output.resolve()):
+            raise ValueError('Runtime template link escapes package')
+        if destination.exists():raise ValueError('Runtime template link duplicates an existing file')
+        data=source.read_bytes()
+        if len(data)!=record['bytes'] or hashlib.sha256(data).hexdigest()!=record['sha256']:
+            raise ValueError('Shared runtime library failed integrity verification')
+        destination.parent.mkdir(parents=True,exist_ok=True)
+        copy_file(source,destination)
+
 def workspace(path):
     explicit=os.environ.get('NIAGARA_LITE_PROJECT')
     if explicit:
@@ -148,7 +168,7 @@ def cook(path,project,system,output,timeout):
     shader='PCD3D_SM6' if WIN else 'VULKAN_SM6'
     if not (cooked/'Engine'/('GlobalShaderCache-'+shader+'.bin')).is_file():raise RuntimeError('Cook did not produce the expected SM6 shader cache')
     template=Path(os.environ.get('NIAGARA_LITE_RUNTIME_TEMPLATE',ROOT/'runtime-template'))
-    shutil.copytree(template,output,copy_function=copy_file)
+    copy_runtime_template(template,output)
     paks=list(template.glob('**/Content/Paks/*.pak'))
     if len(paks)!=1:raise RuntimeError('Expected exactly one template Pak')
     pak=paks[0];digest=hashlib.sha256(pak.read_bytes()).hexdigest()
