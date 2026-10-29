@@ -1,0 +1,17 @@
+{
+  "schema": "ue-niagara-recipe/1",
+  "operations": [
+    {"op":"add-emitter","emitter":"RibbonBeam","template":"/Niagara/DefaultAssets/Templates/Emitters/DynamicBeam.DynamicBeam"},
+    {"op":"emitter-properties","emitter":"RibbonBeam","properties":{"bDeterminism":true,"RandomSeed":1337}},
+    {"op":"remove-renderer","emitter":"RibbonBeam","renderer":0},
+    {"op":"add-ribbon-renderer","emitter":"RibbonBeam"},
+    {"op":"renderer-properties","emitter":"RibbonBeam","renderer":0,"properties":{"Material":"/Niagara/DefaultAssets/DefaultRIbbonMaterial.DefaultRibbonMaterial","FacingMode":"Screen","Shape":"Plane"}},
+    {"op":"input","emitter":"RibbonBeam","script":"EmitterUpdateScript","module":"BeamEmitterSetup","input":"Beam End","type":"vec3","value":[220,0,220]},
+    {"op":"input","emitter":"RibbonBeam","script":"EmitterUpdateScript","module":"BeamEmitterSetup","input":"Use Beam Tangents","type":"bool","value":true},
+    {"op":"input","emitter":"RibbonBeam","script":"EmitterUpdateScript","module":"BeamEmitterSetup","input":"Beam Start Tangent","type":"vec3","value":[0,0,1.4]},
+    {"op":"input","emitter":"RibbonBeam","script":"EmitterUpdateScript","module":"BeamEmitterSetup","input":"Beam End Tangent","type":"vec3","value":[0,0,-1.1]},
+    {"op":"input","emitter":"RibbonBeam","script":"ParticleSpawnScript","module":"BeamWidth","input":"Beam Width","type":"float","value":12.0},
+    {"op":"input","emitter":"RibbonBeam","script":"ParticleUpdateScript","module":"Color","input":"Color","type":"color","value":[0.04,0.8,1.0,1.0]},
+    {"op":"input","emitter":"RibbonBeam","script":"ParticleUpdateScript","module":"Color","input":"Scale Alpha","type":"float","value":1.0}
+  ]
+}

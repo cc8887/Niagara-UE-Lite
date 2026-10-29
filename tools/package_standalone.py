@@ -16,20 +16,24 @@ WIN=sys.platform=='win32'
 PLATFORM='Windows' if WIN else 'Linux'
 BIN='Win64' if WIN else 'Linux'
 NAME='Niagara-UE-Lite-Standalone-UE5.8.1-'+PLATFORM+'-x86_64'
+GENERATED_DIRS={'Saved','Intermediate','DerivedDataCache','__pycache__'}
+
+def generated_path(path,root):
+    return any(part in GENERATED_DIRS for part in path.relative_to(root).parts[:-1])
 
 def stage(dest,engine,project,runtime,resume):
     if dest.exists() and not resume:raise ValueError('Stage exists; overwrite refused')
     version=json.loads((engine/'Build/Build.version').read_text())
     if [version[k] for k in ('MajorVersion','MinorVersion','PatchVersion')]!=[5,8,1]:raise ValueError('Expected UE 5.8.1')
     for p in sorted((engine/'Binaries'/BIN).rglob('*')):
-        if not p.is_file() or p.suffix in SKIP:continue
+        if not p.is_file() or p.suffix in SKIP or generated_path(p,engine):continue
         wanted=p.suffix.lower() in ('.dll','.modules','.version','.ini','.json') if WIN else ('.so' in p.name or p.suffix in ('.modules','.version','.ini','.json'))
         wanted|=p.name in (('UnrealEditor-Cmd.exe','ShaderCompileWorker.exe','UnrealPak.exe') if WIN else ('UnrealEditor-Cmd','ShaderCompileWorker','UnrealPak'))
         if wanted:copy(p,dest/'backend/Engine'/p.relative_to(engine))
     for folder in ('Config','Shaders'):
         tree(engine/folder,dest/'backend/Engine'/folder)
     for p in sorted((engine/'Content').rglob('*')):
-        if not p.is_file() or p.suffix in SKIP:continue
+        if not p.is_file() or p.suffix in SKIP or generated_path(p,engine):continue
         rel=p.relative_to(engine/'Content')
         if rel.parts[0]=='Localization' and not (p.suffix=='.locmeta' or p.suffix=='.locres' and 'en' in rel.parts):continue
         copy(p,dest/'backend/Engine/Content'/rel)
@@ -41,7 +45,7 @@ def stage(dest,engine,project,runtime,resume):
         if not source.exists():continue
         if WIN:
             for p in source.rglob('*'):
-                if not p.is_file() or p.suffix in SKIP or any(x in p.parts for x in ('Linux','Mac','include','__pycache__')):continue
+                if not p.is_file() or p.suffix in SKIP or generated_path(p,engine) or any(x in p.parts for x in ('Linux','Mac','include','__pycache__')):continue
                 if p.suffix.lower() in ('.a','.lib','.h','.cpp','.c'):continue
                 copy(p,dest/'backend/Engine'/p.relative_to(engine))
         else:
@@ -50,7 +54,7 @@ def stage(dest,engine,project,runtime,resume):
     if WIN:
         # Native editor dependency; browser resources/helpers are not needed by the CLI.
         for p in (engine/'Binaries/ThirdParty/CEF3').rglob('*'):
-            if p.is_file() and 'Win64' in p.parts and (p.suffix.lower()=='.dll' or 'license' in p.name.lower()):
+            if p.is_file() and not generated_path(p,engine) and 'Win64' in p.parts and (p.suffix.lower()=='.dll' or 'license' in p.name.lower()):
                 copy(p,dest/'backend/Engine'/p.relative_to(engine))
     else:
         linked=subprocess.check_output(['ldd',str(engine/'Binaries/Linux/UnrealEditor-Cmd')],text=True)
@@ -75,7 +79,7 @@ def stage(dest,engine,project,runtime,resume):
     for rel in ('NiagaraPreview/Preview.umap','NiagaraDemo/NS_Fountain.uasset'):
         if (project/'Content'/rel).is_file():copy(project/'Content'/rel,dest/'Project/Content'/rel)
     for p in runtime.rglob('*'):
-        if p.is_file() and p.suffix not in SKIP and 'Manifest_' not in p.name and p.name not in ('Manifest_UFSFiles_Win64.txt','Manifest_NonUFSFiles_Win64.txt'):
+        if p.is_file() and not generated_path(p,runtime) and p.suffix not in SKIP and 'Manifest_' not in p.name and p.name not in ('Manifest_UFSFiles_Win64.txt','Manifest_NonUFSFiles_Win64.txt'):
             copy(p,dest/'runtime-template'/p.relative_to(runtime))
     for name in ('niagara_cli.py','assets_worker.py','author_preview.py','vulkan_probe.py'):
         copy(ROOT/'tools'/name,dest/'scripts'/name)
@@ -96,14 +100,16 @@ exec "$PYTHONHOME/bin/python3" "$ROOT/scripts/niagara_cli.py" "$@"
 ''')
         (dest/'niagara-cli').chmod(0o755)
     if os.environ.get('NIAGARA_PACKAGE_SEED_DDC'):tree(Path(os.environ['NIAGARA_PACKAGE_SEED_DDC']),dest/'cache')
-    files=[p.relative_to(dest).as_posix() for p in sorted(dest.rglob('*')) if p.is_file()]
+    files=[p.relative_to(dest).as_posix() for p in sorted(dest.rglob('*')) if p.is_file() and not generated_path(p,dest)]
     (dest.parent/(NAME+'-file-list.json')).write_text(json.dumps(files,indent=2))
 
 def seal(dest,make_archive,private_roots):
     files=json.loads((dest.parent/(NAME+'-file-list.json')).read_text());records=[]
     needles=[s.encode(enc) for s in private_roots if len(s)>3 for enc in ('utf-8','utf-16le','utf-32le')]
     for rel in files:
-        p=dest/rel;data=p.read_bytes()
+        p=dest/rel
+        if generated_path(p,dest):raise ValueError('Generated scratch path in package list: '+rel)
+        data=p.read_bytes()
         if any(n in data for n in needles):raise ValueError('Private build path remains in '+rel)
         records.append({'path':rel,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
     manifest={'schema':'ue-niagara-standalone/1','engine':'UE5.8.1','platform':PLATFORM,

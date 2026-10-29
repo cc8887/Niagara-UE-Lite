@@ -1,0 +1,18 @@
+{
+  "schema": "ue-niagara-recipe/1",
+  "operations": [
+    {"op":"add-emitter","emitter":"MeshFountain","template":"/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain"},
+    {"op":"emitter-properties","emitter":"MeshFountain","properties":{"bDeterminism":true,"RandomSeed":1337}},
+    {"op":"remove-renderer","emitter":"MeshFountain","renderer":0},
+    {"op":"add-mesh-renderer","emitter":"MeshFountain"},
+    {"op":"renderer-properties","emitter":"MeshFountain","renderer":0,"properties":{
+      "Meshes":[{"mesh":"/Niagara/DefaultAssets/S_Gnomon.S_Gnomon","scale":{"x":2.5,"y":2.5,"z":2.5},"rotation":{"pitch":20,"yaw":30,"roll":15}}],
+      "bOverrideMaterials":true,"OverrideMaterials":[{"explicitMat":"/Niagara/DefaultAssets/M_Gnomon_Alpha.M_Gnomon_Alpha"}]
+    }},
+    {"op":"input","emitter":"MeshFountain","script":"EmitterUpdateScript","module":"SpawnRate","input":"SpawnRate","type":"float","value":40.0},
+    {"op":"input","emitter":"MeshFountain","script":"ParticleSpawnScript","module":"AddVelocity","input":"Velocity Speed","type":"float","value":500.0},
+    {"op":"input","emitter":"MeshFountain","script":"ParticleUpdateScript","module":"GravityForce","input":"Gravity","type":"vec3","value":[0,0,-300]},
+    {"op":"input","emitter":"MeshFountain","script":"ParticleUpdateScript","module":"Drag","input":"Drag","type":"float","value":0.3},
+    {"op":"input","emitter":"MeshFountain","script":"ParticleSpawnScript","module":"InitializeParticle","input":"Color","type":"color","value":[1.0,0.65,0.35,1.0]}
+  ]
+}

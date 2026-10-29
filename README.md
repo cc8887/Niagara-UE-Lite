@@ -34,6 +34,38 @@ Linux 无 GPU 时，加 `--cpu-vulkan`，需要满足 UE Vulkan SM6 的 Mesa lav
 驱动。CPU 粒子仿真和 CPU Vulkan 渲染是两个独立概念；`--cpu-vulkan` 会检测并
 选择 CPU Vulkan 设备，不会用其他绘图库生成替代图像。
 
+新增演示入口包括 GPU Sprite、CPU Ribbon 和 CPU Mesh Renderer。Windows：
+
+```powershell
+.\niagara-cli.exe --workspace .\work demo --effect gpu --out .\outputs\gpu.png
+.\niagara-cli.exe --workspace .\work demo --effect ribbon --out .\outputs\ribbon.png
+.\niagara-cli.exe --workspace .\work demo --effect mesh --out .\outputs\mesh.png
+```
+
+Linux 使用同样的 `--effect` 选项；软件 Vulkan 示例：
+
+```sh
+./niagara-cli --workspace ./work demo --effect gpu --cpu-vulkan --out outputs/gpu.png
+./niagara-cli --workspace ./work demo --effect ribbon --cpu-vulkan --out outputs/ribbon.png
+./niagara-cli --workspace ./work demo --effect mesh --cpu-vulkan --out outputs/mesh.png
+```
+
+`gpu` 配方将 Niagara 仿真目标设为 `GPUComputeSim`。若 Vulkan 设备是 llvmpipe，
+计算着色器由软件设备执行；不能将其称为物理 GPU 验证。`ribbon` 与 `mesh` 配方
+仍使用 `CPUSim`，分别检验原生 Ribbon 和 Mesh Renderer，不表示两者的 GPU 仿真
+组合也已完成验收。具体平台、图像与测量结果见
+[renderer-validation.md](docs/renderer-validation.md)。
+
+配方使用两端都具备的原生 `Fountain` 和 `DynamicBeam` 模板。同为 UE 5.8.1 的
+安装也可能有不同内容目录；配方不再依赖仅在部分安装中提供的 `StaticBeam` 或
+`UpwardMeshBurst`。Mesh 示例使用 `S_Gnomon`；Ribbon 与 Mesh 材质均为原生 Unlit
+材质，因此不要求演示场景额外放置灯光。
+
+运行元数据区分 `simTarget`、Renderer 类和 RHI 设备。CPU 粒子数直接读取数据集；
+GPU 粒子数在截图保存后从原生 GPU 缓冲读回，并报告 `particleCountSource`、
+`particleCountExact` 和 `gpuReadbackCompleted`。读回不参与已经保存的图像生成，
+也不会把 CPU 侧估计值当作精确 GPU 数量。
+
 资产与源图保存在工作区 `Content` / `SourceArt`；编辑旧资产前自动备份至
 `Saved/NiagaraStandalone/Backups`。创建时拒绝覆盖，操作失败不保存主资产。
 每个命令使用独立后端进程；首轮无缓存 Cook 可能需要数分钟。
@@ -55,10 +87,17 @@ Renderer。支持 PNG/JPEG/TGA/BMP/EXR/HDR 的 UE TextureFactory 导入，也支
 - `ue-niagara-snapshot/1`：读取原生拓扑、参数值、动态值类型、渲染器和编译状态。
 - `ue-niagara-recipe/1`：通过原生模板、模块与编辑操作创建或修改资产。
 
+Renderer 创建操作为 `add-sprite-renderer`、`add-ribbon-renderer`、
+`add-mesh-renderer`；均指定 `emitter`。通过 `renderer-properties` 设置原生材质、
+网格、朝向等属性，通过 `remove-renderer` 删除指定索引。Ribbon 与 Mesh 配方
+实际执行了删除模板 Renderer、重新添加并配置 Renderer 的流程。
+
 Snapshot 不是通用粒子解释器格式，也不承诺任意 Niagara 图可由 JSON 无损重建。
 完整编辑资产保留在 `.uasset`。纯 Runtime 消费 Cook 后的字节码和 ShaderMap。
 
 构建与封包见 [build.md](docs/build.md)。可执行文件、SDK、缓存和压缩包不进入 Git。
 包含 Epic Engine Tools 的完整包保留 Epic 分发条款，沿用私有交付方式。
 
-双平台实际包体、原生资产读写和渲染验收见 [validation.md](docs/validation.md)。
+首版双平台包体、原生资产读写和 Sprite 渲染验收保留在
+[validation.md](docs/validation.md)；GPU、Ribbon、Mesh 的扩展验收单独记录于
+[renderer-validation.md](docs/renderer-validation.md)。

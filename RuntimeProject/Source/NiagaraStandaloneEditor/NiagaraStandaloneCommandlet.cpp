@@ -6,6 +6,8 @@
 #include "NiagaraScript.h"
 #include "NiagaraRendererProperties.h"
 #include "NiagaraSpriteRendererProperties.h"
+#include "NiagaraRibbonRendererProperties.h"
+#include "NiagaraMeshRendererProperties.h"
 #include "NiagaraTypes.h"
 #include "JsonObjectConverter.h"
 #include "Misc/FileHelper.h"
@@ -108,6 +110,8 @@ void Apply(UNiagaraSystem* S,const J& O,FNiagaraExternalEditContext& C)
         if(Op==TEXT("renderer-properties")){FNiagaraExt_RendererData D;D.PropertyValues=Json(*P);U::SetRendererData(R,D,C);}
     }
     else if(Op==TEXT("add-sprite-renderer")){FNiagaraExt_RendererRef Out;U::AddRenderer(R,UNiagaraSpriteRendererProperties::StaticClass(),Out,C);}
+    else if(Op==TEXT("add-ribbon-renderer")){FNiagaraExt_RendererRef Out;U::AddRenderer(R,UNiagaraRibbonRendererProperties::StaticClass(),Out,C);}
+    else if(Op==TEXT("add-mesh-renderer")){FNiagaraExt_RendererRef Out;U::AddRenderer(R,UNiagaraMeshRendererProperties::StaticClass(),Out,C);}
     else if(Op==TEXT("remove-renderer"))U::RemoveRenderer(R,C);
     else ReportError(C,TEXT("Unsupported operation: ")+Op);
 }

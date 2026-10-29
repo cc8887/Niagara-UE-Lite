@@ -17,6 +17,8 @@ WIN=sys.platform=='win32'
 PLATFORM='Windows' if WIN else 'Linux'
 BIN='Win64' if WIN else 'Linux'
 EXT='.exe' if WIN else ''
+DEMOS={'fountain':'fountain.json','gpu':'gpu-fountain.json',
+       'ribbon':'ribbon-beam.json','mesh':'mesh-fountain.json'}
 ENGINE=Path(os.environ.get('NIAGARA_LITE_ENGINE',ROOT/'backend/Engine'))
 ASSET=re.compile(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*')
 
@@ -89,7 +91,7 @@ def operations(recipe):
     if not isinstance(ops,list):raise ValueError('operations must be an array')
     supported={'add-emitter','remove-emitter','add-module','remove-module','module-enabled','input',
                'emitter-enabled','system-properties','emitter-properties','renderer-properties',
-               'add-sprite-renderer','remove-renderer'}
+               'add-sprite-renderer','add-ribbon-renderer','add-mesh-renderer','remove-renderer'}
     for op in ops:
         if not isinstance(op,dict) or op.get('op') not in supported:raise ValueError('Unknown operation')
         action=op['op']
@@ -99,7 +101,8 @@ def operations(recipe):
                   'module-enabled':['emitter','script','module','value'],'emitter-enabled':['emitter','value'],
                   'system-properties':['properties'],'emitter-properties':['emitter','properties'],
                   'renderer-properties':['emitter','renderer','properties'],
-                  'add-sprite-renderer':['emitter'],'remove-renderer':['emitter','renderer']}[action]
+                  'add-sprite-renderer':['emitter'],'add-ribbon-renderer':['emitter'],
+                  'add-mesh-renderer':['emitter'],'remove-renderer':['emitter','renderer']}[action]
         if any(k not in op for k in required):raise ValueError('Missing field for '+action)
         if action.endswith('-enabled') and not isinstance(op['value'],bool):raise ValueError('enabled value must be boolean')
         if action.endswith('-properties') and not isinstance(op['properties'],dict):raise ValueError('properties must be an object')
@@ -211,6 +214,7 @@ def main():
     q=sub.add_parser('create-material');q.add_argument('--asset',required=True,type=asset);q.add_argument('--texture',required=True,type=asset)
     for name in ('cook','render','build','demo'):
         q=sub.add_parser(name)
+        if name=='demo':q.add_argument('--effect',choices=sorted(DEMOS),default='fountain')
         if name!='demo':q.add_argument('--asset',required=True,type=asset)
         if name in ('cook','render'):q.add_argument('--package',required=True,type=Path)
         if name!='cook':
@@ -221,10 +225,11 @@ def main():
     if not 1<=args.timeout<=7200:raise ValueError('timeout must be 1..7200')
     if args.command=='capabilities':return {'ok':True,'engine':'5.8.1','platform':PLATFORM,'nativeNiagara':True,
         'headlessEditorBundled':True,'withUnrealEd':True,'previewWithEditor':False,'create':'template/recipe',
+        'demos':list(DEMOS),'demoSimTargets':{'gpu':'GPUComputeSim','ribbon':'CPUSim','mesh':'CPUSim','fountain':'CPUSim'},
         'serialization':['native uasset','ue-niagara-snapshot/1','ue-niagara-recipe/1'],
         'limitations':['Snapshots describe native graphs; they are not a cross-engine particle format.',
                        'Plugin-specific assets require matching plugins. Scene-dependent interfaces need a supplied scene.',
-                       'Initial validation targets a CPU-sim sprite emitter; GPU simulations are separately qualified.']}
+                       'Renderer demos cover GPU Sprite and CPU Ribbon/Mesh; GPU Ribbon/Mesh and Fluids require separate qualification.']}
     if args.command=='render':path=project=None
     else:path,project=workspace(args.workspace)
     if args.command=='init':return {'ok':True,'workspace':str(path)}
@@ -245,8 +250,8 @@ def main():
         raise ValueError('Invalid simulation frame count or render size')
     out=args.out.resolve()
     if args.command=='demo':
-        args.asset='/Game/NiagaraDemo/NS_Fountain_'+uuid.uuid4().hex[:8]
-        result=edit(path,project,'create',args.asset,args.timeout,operations=operations(ROOT/'examples/fountain.json'))
+        args.asset='/Game/NiagaraDemo/NS_'+args.effect.title()+'_'+uuid.uuid4().hex[:8]
+        result=edit(path,project,'create',args.asset,args.timeout,operations=operations(ROOT/'examples'/DEMOS[args.effect]))
         write_json(out.with_suffix('.asset.json'),result)
     if args.command in ('build','demo'):
         package=out.parent/(out.stem+'-runtime');cook(path,project,args.asset,package,args.timeout)
