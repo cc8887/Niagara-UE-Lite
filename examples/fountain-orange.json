@@ -1,0 +1,9 @@
+{
+  "schema": "ue-niagara-recipe/1",
+  "operations": [
+    {"op":"input","emitter":"Fountain","script":"EmitterUpdateScript","module":"SpawnRate","input":"SpawnRate","type":"float","value":240.0},
+    {"op":"input","emitter":"Fountain","script":"ParticleSpawnScript","module":"InitializeParticle","input":"Color","type":"color","value":[1.0,0.12,0.015,1.0]},
+    {"op":"input","emitter":"Fountain","script":"ParticleSpawnScript","module":"InitializeParticle","input":"Uniform Sprite Size Min","type":"float","value":10.0},
+    {"op":"input","emitter":"Fountain","script":"ParticleSpawnScript","module":"InitializeParticle","input":"Uniform Sprite Size Max","type":"float","value":20.0}
+  ]
+}

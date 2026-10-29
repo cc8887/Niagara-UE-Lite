@@ -1,0 +1,15 @@
+{
+  "schema": "ue-niagara-recipe/1",
+  "operations": [
+    {
+      "op": "add-emitter",
+      "emitter": "Fountain",
+      "template": "/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain"
+    },
+    {
+      "op": "emitter-properties",
+      "emitter": "Fountain",
+      "properties": {"bDeterminism": true, "RandomSeed": 1337}
+    }
+  ]
+}
