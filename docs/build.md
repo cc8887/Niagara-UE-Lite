@@ -53,3 +53,8 @@ The smaller production profile, Linux no-CEF module rebuild, symbol stripping,
 library deduplication and edit/render acceptance are described in
 [slimming.md](slimming.md). Rebuild or slim only into a new output tree; preserve
 published bundles until the replacement passes extracted-package validation.
+
+The source-patched commandlet service profile, editor-module dependency pass and
+platform-specific rebuild helpers are described in
+[editor-backend-profile.md](editor-backend-profile.md). Source compilation and
+static closure checks do not replace extracted-package native qualification.

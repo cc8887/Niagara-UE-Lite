@@ -26,7 +26,7 @@ def main():
     path=project.parent
     if not (path/'Content/NiagaraDemo/NS_Fountain.uasset').exists():
         cli.edit(path,project,'create','/Game/NiagaraDemo/NS_Fountain',1800,operations=cli.operations(ROOT/'examples/fountain.json'))
-    cli.python_worker(path,project,'author_preview.py',1800)
+    cli.edit(path,project,'prepare-preview','/Game/NiagaraPreview/Preview',1800)
     code,_=cli.run([cli.editor(),project,'-run=Cook','-TargetPlatform='+('Windows' if win else 'Linux'),
                     '-CookDir='+str(path/'Content'),'-Map=/Game/NiagaraPreview/Preview','-unversioned','-compressed',
                     '-SkipCookingEditorContent','-NullRHI',*cli.common()],path,cli.env_for(path),path/'Saved/niagara-build-cook.log',7200)

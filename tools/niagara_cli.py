@@ -99,7 +99,8 @@ def run(command,cwd,env,log,timeout):
 
 def common():
     return ['-unattended','-nosplash','-nosound','-nop4','-NoCrashDialog','-NoCrashReportClient',
-            '-notraceserver','-NoZenAutoLaunch','-culture=en','-stdout','-FullStdOutLogOutput','-ddc=NiagaraStandaloneDDC']
+            '-notraceserver','-NoZenAutoLaunch','-culture=en','-stdout','-FullStdOutLogOutput','-ddc=NiagaraStandaloneDDC',
+            '-NiagaraLiteBackend']
 
 def editor():return ENGINE/'Binaries'/BIN/('UnrealEditor-Cmd'+EXT)
 
@@ -157,7 +158,7 @@ def python_worker(path,project,script,timeout,request=None):
 def cook(path,project,system,output,timeout):
     edit(path,project,'read',system,timeout)
     if output.exists():raise ValueError('Cook output exists; use a new directory')
-    python_worker(path,project,'author_preview.py',timeout)
+    edit(path,project,'prepare-preview','/Game/NiagaraPreview/Preview',timeout)
     state=path/'Saved/NiagaraStandalone';token=uuid.uuid4().hex
     log=state/(token+'-cook.log')
     code,_=run([editor(),project,'-run=Cook','-TargetPlatform='+PLATFORM,'-CookDir='+str(path/'Content'),

@@ -18,6 +18,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UObject/UnrealType.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -154,6 +155,34 @@ int32 UNiagaraStandaloneCommandlet::Main(const FString& Params)
     const bool Mutating=Op==TEXT("create")||Op==TEXT("edit")||Op==TEXT("save");
     Result->SetStringField(TEXT("engine"),FEngineVersion::Current().ToString());
     if(!FPackageName::IsValidLongPackageName(Asset)||!Asset.StartsWith(TEXT("/Game/")))ReportError(Errors,TEXT("Expected a /Game package path"));
+    else if(Op==TEXT("prepare-preview"))
+    {
+        if(Asset!=TEXT("/Game/NiagaraPreview/Preview"))ReportError(Errors,TEXT("Unexpected preview map path"));
+        else if(FPackageName::DoesPackageExist(Asset))
+        {
+            if(!LoadObject<UWorld>(nullptr,*Asset))ReportError(Errors,TEXT("Existing preview package is not a world"));
+            else Result->SetBoolField(TEXT("saved"),true);
+        }
+        else
+        {
+            UPackage* Package=CreatePackage(*Asset);
+            UWorld::InitializationValues Values;
+            Values.AllowAudioPlayback(false).RequiresHitProxies(false).CreatePhysicsScene(false).CreateNavigation(false).CreateAISystem(false);
+            UWorld* World=UWorld::CreateWorld(EWorldType::Editor,false,FName(TEXT("Preview")),Package,true,ERHIFeatureLevel::SM6,&Values);
+            if(!World)ReportError(Errors,TEXT("Unable to create preview world"));
+            else
+            {
+                World->SetFlags(RF_Public|RF_Standalone);
+                const FString File=FPackageName::LongPackageNameToFilename(Asset,FPackageName::GetMapPackageExtension());
+                IFileManager::Get().MakeDirectory(*FPaths::GetPath(File),true);
+                FSavePackageArgs Args;Args.TopLevelFlags=RF_Public|RF_Standalone;Args.SaveFlags=SAVE_NoError;
+                if(!UPackage::SavePackage(Package,World,*File,Args))ReportError(Errors,TEXT("Unable to save preview world"));
+                else {FAssetRegistryModule::AssetCreated(World);Result->SetBoolField(TEXT("saved"),true);}
+                World->DestroyWorld(false);
+                World->RemoveFromRoot();
+            }
+        }
+    }
     else if(Op==TEXT("create"))
     {
         if(FPackageName::DoesPackageExist(Asset))ReportError(Errors,TEXT("Refusing to replace an existing package"));

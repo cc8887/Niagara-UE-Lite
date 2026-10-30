@@ -76,7 +76,7 @@ def main():
             if src.is_file():
                 rel=src.relative_to(ROOT).as_posix();copy(src,dest/rel)
                 if rel not in kept:kept.append(rel)
-    for name in ('niagara_cli.py','assets_worker.py','author_preview.py','vulkan_probe.py'):
+    for name in ('niagara_cli.py','assets_worker.py','vulkan_probe.py'):
         copy(ROOT/'tools'/name,dest/'scripts'/name)
     inventory_name='resource-inventory.json'
     copy(a.dependencies,dest/inventory_name)

@@ -10,7 +10,9 @@ def execute(q):
     target=q['asset'];folder,name=target.rsplit('/',1)
     if not re.fullmatch(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*',target):raise ValueError('Invalid /Game asset path')
     relative_folder=folder[len('/Game'):].lstrip('/')
-    if ue.EditorAssetLibrary.does_asset_exist(target):raise ValueError('Asset exists; overwrite refused')
+    registry=ue.AssetRegistryHelpers.get_asset_registry()
+    package_file=Path(ue.Paths.project_content_dir())/relative_folder/(name+'.uasset')
+    if package_file.exists() or registry.get_assets_by_package_name(target):raise ValueError('Asset exists; overwrite refused')
     tools=ue.AssetToolsHelpers.get_asset_tools()
     if q['operation']=='import-texture':
         source=Path(q['file']).resolve()
@@ -64,7 +66,7 @@ def execute(q):
         assert m.connect_material_property(alpha,'',ue.MaterialProperty.MP_OPACITY)
         m.recompile_material(obj)
     else:raise ValueError('Unknown asset operation')
-    if not ue.EditorAssetLibrary.save_loaded_asset(obj):raise RuntimeError('Native save failed')
+    if not ue.EditorLoadingAndSavingUtils.save_packages([obj.get_outermost()],False):raise RuntimeError('Native save failed')
     return {'ok':True,'asset':obj.get_path_name(),'class':obj.get_class().get_name(),'saved':True}
 
 try:

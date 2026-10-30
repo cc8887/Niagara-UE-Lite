@@ -140,7 +140,7 @@ def main():
         (dest/rel).write_text(json.dumps({'schema':'niagara-runtime-template-links/1','files':windows_links},indent=2)+'\n')
         files.append(rel)
     # Publish current portable scripts/docs, never a developer helper or local log.
-    for name in ('niagara_cli.py','assets_worker.py','author_preview.py','vulkan_probe.py'):
+    for name in ('niagara_cli.py','assets_worker.py','vulkan_probe.py'):
         rel='scripts/'+name;copy(REPO/'tools'/name,dest/rel)
         if rel not in files:files.append(rel)
     for folder in ('examples','docs'):

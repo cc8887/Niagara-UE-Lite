@@ -63,7 +63,7 @@ def stage(dest,engine,project,runtime,resume):
         for p in cef.parent.iterdir():
             if p.is_file() and 'license' in p.name.lower():copy(p,dest/'backend/Engine'/p.relative_to(engine))
         if shutil.which('strip'):subprocess.run(['strip','--strip-debug',str(dest/'backend/Engine'/cef.relative_to(engine))],check=True)
-    for name in ('Niagara','PythonScriptPlugin','EditorScriptingUtilities','ContentBrowserFileDataSource'):
+    for name in ('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource'):
         descriptor=next(engine.glob('Plugins/**/'+name+'.uplugin'));plugin=descriptor.parent
         for folder in ('Binaries/'+BIN,'Config','Content','Resources','Shaders'):
             if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder)
@@ -81,7 +81,7 @@ def stage(dest,engine,project,runtime,resume):
     for p in runtime.rglob('*'):
         if p.is_file() and not generated_path(p,runtime) and p.suffix not in SKIP and 'Manifest_' not in p.name and p.name not in ('Manifest_UFSFiles_Win64.txt','Manifest_NonUFSFiles_Win64.txt'):
             copy(p,dest/'runtime-template'/p.relative_to(runtime))
-    for name in ('niagara_cli.py','assets_worker.py','author_preview.py','vulkan_probe.py'):
+    for name in ('niagara_cli.py','assets_worker.py','vulkan_probe.py'):
         copy(ROOT/'tools'/name,dest/'scripts'/name)
     tree(ROOT/'examples',dest/'examples');copy(ROOT/'README.md',dest/'README.md')
     tree(ROOT/'docs',dest/'docs')

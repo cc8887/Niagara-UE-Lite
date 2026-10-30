@@ -11,6 +11,11 @@ Windows 使用 D3D12/SM6；Linux 使用 Vulkan/SM6。
 时仍能创建、编辑、保存和 Cook，首次编译会更慢。缓存安装位置与资源边界见
 [curation.md](docs/curation.md)。
 
+命令行服务配置进一步解除 MainFrame、Persona 的运行依赖，并按平台保留 Cook
+目标及着色器格式。贴图操作使用原生资产服务，预览地图由原生命令行后端创建和
+保存；Sequencer、GraphEditor 及必要的编辑、编译服务继续保留。实现和验证边界见
+[editor-backend-profile.md](docs/editor-backend-profile.md)。
+
 精简发行包移除 CEF、可选图形调试层和外置符号/静态库，剥离 Linux ELF 中的
 非必要符号并对相同库去重。Linux 的 WebBrowser / CEF3Utils 从匹配源码重新
 编译为 `WITH_CEF3=0`，解除对 Chromium 的硬依赖。Cook 导出的运行目录会补齐
