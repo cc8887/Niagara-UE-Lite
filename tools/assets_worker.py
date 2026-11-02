@@ -6,7 +6,50 @@ import shutil
 import re
 import unreal as ue
 
+def import_native_assets(q):
+    """Preserve /Game package paths and reject collisions before writing files."""
+    source=Path(q['source']).resolve()
+    content=Path(ue.Paths.convert_relative_path_to_full(ue.Paths.project_content_dir())).resolve()
+    if not source.is_dir():raise ValueError('Expected a Content-root directory')
+    if source==content or source.is_relative_to(content) or content.is_relative_to(source):
+        raise ValueError('Source and destination Content roots must be separate')
+    packages=sorted(p for p in source.rglob('*') if p.is_file() and p.suffix.lower() in ('.uasset','.umap'))
+    if not packages:raise ValueError('No native packages found')
+    files={};package_names=[]
+    for package in packages:
+        relative=package.relative_to(source)
+        if package.is_symlink() or not package.resolve().is_relative_to(source):raise ValueError('Package escapes source root')
+        package_names.append('/Game/'+relative.with_suffix('').as_posix())
+        for candidate in [package,*[package.with_suffix(s) for s in ('.uexp','.ubulk','.uptnl','.m.ubulk')]]:
+            if not candidate.is_file():continue
+            if candidate.is_symlink() or not candidate.resolve().is_relative_to(source):raise ValueError('Sidecar escapes source root')
+            rel=candidate.relative_to(source);dest=(content/rel).resolve()
+            if not dest.is_relative_to(content):raise ValueError('Destination escapes Content root')
+            if dest.exists():raise ValueError('Existing package/sidecar; overwrite refused: '+rel.as_posix())
+            files[rel]=candidate
+    installed=[]
+    try:
+        for relative,src in files.items():
+            dest=content/relative;dest.parent.mkdir(parents=True,exist_ok=True)
+            with dest.open('xb') as output:
+                installed.append(dest)
+                with src.open('rb') as data:shutil.copyfileobj(data,output)
+        registry=ue.AssetRegistryHelpers.get_asset_registry()
+        registry.scan_files_synchronous([str(content/p.relative_to(source)) for p in packages],True)
+        rows=[]
+        for name in package_names:
+            obj=ue.load_asset(name)
+            if obj is None:raise RuntimeError('Native loader could not load '+name+'; supply matching engine/plugins and package dependencies')
+            rows.append({'asset':obj.get_path_name(),'class':obj.get_class().get_path_name()})
+        return {'ok':True,'packages':rows,'files':len(installed),'packagePathsPreserved':True,
+                'nativeLoadValidated':True,'dependencyClosureSuppliedByCaller':True}
+    except Exception:
+        for path in reversed(installed):path.unlink(missing_ok=True)
+        raise
+
+
 def execute(q):
+    if q['operation']=='import-assets':return import_native_assets(q)
     target=q['asset'];folder,name=target.rsplit('/',1)
     if not re.fullmatch(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*',target):raise ValueError('Invalid /Game asset path')
     relative_folder=folder[len('/Game'):].lstrip('/')

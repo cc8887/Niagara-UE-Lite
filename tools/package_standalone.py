@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+import tempfile
 from package_support import copy,tree,SOURCE_PREFIXES,SKIP
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -66,7 +67,8 @@ def stage(dest,engine,project,runtime,resume):
     for name in ('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource'):
         descriptor=next(engine.glob('Plugins/**/'+name+'.uplugin'));plugin=descriptor.parent
         for folder in ('Binaries/'+BIN,'Config','Content','Resources','Shaders'):
-            if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder)
+            if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder,
+                ('DefaultAssets/Templates/',) if name=='Niagara' and folder=='Content' else ())
         copy(descriptor,dest/'backend/Engine'/descriptor.relative_to(engine))
     config=engine/'Platforms'/PLATFORM/'Config'
     if config.is_dir():tree(config,dest/'backend/Engine'/config.relative_to(engine))
@@ -75,15 +77,15 @@ def stage(dest,engine,project,runtime,resume):
     for p in (project/'Binaries'/BIN).iterdir():
         if p.is_file() and (p.suffix=='.modules' or p.name.startswith(('UnrealEditor-NiagaraStandalone','libUnrealEditor-NiagaraStandalone')) and p.suffix in ('.dll','.so')):
             copy(p,dest/'Project/Binaries'/BIN/p.name)
-    # Only the intentionally authored demo/map, never arbitrary workspace assets.
-    for rel in ('NiagaraPreview/Preview.umap','NiagaraDemo/NS_Fountain.uasset'):
+    # A preview world is infrastructure. Effect presets are not authoring inputs.
+    for rel in ('NiagaraPreview/Preview.umap',):
         if (project/'Content'/rel).is_file():copy(project/'Content'/rel,dest/'Project/Content'/rel)
     for p in runtime.rglob('*'):
         if p.is_file() and not generated_path(p,runtime) and p.suffix not in SKIP and 'Manifest_' not in p.name and p.name not in ('Manifest_UFSFiles_Win64.txt','Manifest_NonUFSFiles_Win64.txt'):
             copy(p,dest/'runtime-template'/p.relative_to(runtime))
-    for name in ('niagara_cli.py','assets_worker.py','vulkan_probe.py'):
+    for name in ('niagara_cli.py','assets_worker.py','vulkan_probe.py','native_python_worker.py','document_io.py'):
         copy(ROOT/'tools'/name,dest/'scripts'/name)
-    tree(ROOT/'examples',dest/'examples');copy(ROOT/'README.md',dest/'README.md')
+    copy(ROOT/'README.md',dest/'README.md')
     tree(ROOT/'docs',dest/'docs')
     if WIN:
         launcher=os.environ.get('NIAGARA_PACKAGE_LAUNCHER')
@@ -100,6 +102,11 @@ exec "$PYTHONHOME/bin/python3" "$ROOT/scripts/niagara_cli.py" "$@"
 ''')
         (dest/'niagara-cli').chmod(0o755)
     if os.environ.get('NIAGARA_PACKAGE_SEED_DDC'):tree(Path(os.environ['NIAGARA_PACKAGE_SEED_DDC']),dest/'cache')
+    # The runtime scaffold may originate from an older demo build. Remove its
+    # cooked presets too; omitting uncooked templates alone is insufficient.
+    with tempfile.TemporaryDirectory(prefix='niagara-scaffold-') as scratch:
+        subprocess.run([sys.executable,str(ROOT/'tools/prune_runtime_fixtures.py'),
+                        '--kit',str(dest),'--work',str(Path(scratch)/'prune')],check=True)
     files=[p.relative_to(dest).as_posix() for p in sorted(dest.rglob('*')) if p.is_file() and not generated_path(p,dest)]
     (dest.parent/(NAME+'-file-list.json')).write_text(json.dumps(files,indent=2))
 
@@ -121,6 +128,10 @@ def seal(dest,make_archive,private_roots):
               'editorInstallationRequired':False,'includesUnrealEd':True,'includesNiagaraEditor':True,
               'cppSdkRequired':False,'runtimeWithEditor':False,'payloadBytes':sum(r['bytes'] for r in records),
               'storedPayloadBytes':stored_bytes,'hardlinkedFiles':sum('hardlinkTo' in r for r in records),'records':records}
+    if os.environ.get('NIAGARA_PACKAGE_SOURCE_COMMIT'):manifest['sourceCommit']=os.environ['NIAGARA_PACKAGE_SOURCE_COMMIT']
+    if os.environ.get('NIAGARA_PACKAGE_RELEASE'):manifest['release']=os.environ['NIAGARA_PACKAGE_RELEASE']
+    manifest['authoringDocumentSchema']='ue-niagara-document/1'
+    manifest['emitterTemplatesRequired']=False
     (dest/'package-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     summary={k:v for k,v in manifest.items() if k!='records'};summary['files']=len(files)+1
     if make_archive:

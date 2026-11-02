@@ -4,8 +4,9 @@ SOURCE_PREFIXES=[]
 SKIP={".debug",".sym",".pdb",".pyc",".target"}
 
 def clean_vfs(data):
+    virtual_drive='Z'+chr(58)  # UE's synthetic VFS drive, not a host path.
     for encoding,width in (('utf-8',1),('utf-16le',2),('utf-32le',4)):
-        for marker in ('/UEVFS/Root;', 'Z:\\UEVFS\\Root;', 'Z:\\UEVFS\\LinuxSDK;'):
+        for marker in ('/UEVFS/Root;', virtual_drive+r'\UEVFS\Root;', virtual_drive+r'\UEVFS\LinuxSDK;'):
             offset = 0
             while True:
                 start = data.find(marker.encode(encoding), offset)
@@ -42,10 +43,11 @@ def copy(source, destination):
     destination.chmod(0o755 if source.stat().st_mode&0o111 else 0o644)
 
 
-def tree(source, destination):
+def tree(source, destination, exclude_prefixes=()):
     for p in sorted(source.rglob('*')):
         if not p.is_file():continue
         rel = p.relative_to(source)
+        if exclude_prefixes and rel.as_posix().startswith(exclude_prefixes):continue
         if p.suffix in SKIP or any(x in rel.parts for x in ('Intermediate','Saved','Source','__pycache__','include')):continue
         if p.name.endswith('.a') or any(x.startswith('config-3.') for x in rel.parts):continue
         copy(p,destination/rel)

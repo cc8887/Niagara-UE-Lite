@@ -22,6 +22,11 @@ DEMOS={'fountain':'fountain.json','gpu':'gpu-fountain.json',
 ENGINE=Path(os.environ.get('NIAGARA_LITE_ENGINE',ROOT/'backend/Engine'))
 ASSET=re.compile(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*')
 
+class BackendFailure(RuntimeError):
+    def __init__(self,result):
+        self.result=result
+        super().__init__('Native backend operation failed')
+
 def asset(value):
     if not ASSET.fullmatch(value):raise ValueError('Expected a /Game package path without suffix or traversal')
     return value
@@ -74,6 +79,8 @@ def workspace(path):
     return path,project
 
 def env_for(path):
+    if WIN and len(str(path/'DerivedDataCache'))>119:
+        raise ValueError('UE Windows filesystem DDC path exceeds 119 characters; use a shorter --workspace path')
     env=os.environ.copy()
     env.update({'UE-LocalDataCachePath':str(path/'DerivedDataCache'),'UE-SharedDataCachePath':'None',
                 'UE_SKIP_UBT_SDK_SETUP':'1','PYTHONNOUSERSITE':'1'})
@@ -104,44 +111,61 @@ def common():
 
 def editor():return ENGINE/'Binaries'/BIN/('UnrealEditor-Cmd'+EXT)
 
+def operation_contract():
+    return {'add-emitter':['emitter'],'remove-emitter':['emitter'],
+                  'add-set-parameters':['script','parameters'],'add-set-parameter':['script','module','parameters'],
+                  'remove-set-parameter':['script','module','name'],
+                  'add-stage':['name'],'remove-stage':['usageId'],
+                  'stage-properties':['usageId','properties'],'stage-enabled':['usageId','value'],
+                  'move-stage':['usageId','index'],'add-event-handler':[],
+                  'event-properties':['usageId','properties'],'remove-event-handler':['usageId'],
+                  'rename-emitter':['emitter','name'],'duplicate-emitter':['emitter','name'],
+                  'add-module':['script','asset'],'remove-module':['script','module'],
+                  'move-module':['script','module','index'],'reset-input':['script','module'],
+                  'scratch-module':['script','module','name'],
+                  'input':['script','module','type','value'],
+                  'module-enabled':['script','module','value'],'emitter-enabled':['emitter','value'],
+                  'asset-properties':['properties'],'system-properties':['properties'],'emitter-properties':['properties'],
+                  'renderer-properties':['renderer','properties'],
+                  'add-sprite-renderer':[],'add-ribbon-renderer':[],
+                  'add-mesh-renderer':[],'add-renderer':['class'],'remove-renderer':['renderer'],
+                  'set-user':['name','type','value'],'remove-user':['name']}
+
+
 def operations(recipe):
     data=load_json(recipe)
     if not isinstance(data,dict) or data.get('schema')!='ue-niagara-recipe/1':
         raise ValueError('Expected ue-niagara-recipe/1')
     ops=data.get('operations',[])
     if not isinstance(ops,list):raise ValueError('operations must be an array')
-    supported={'add-emitter','remove-emitter','add-module','remove-module','module-enabled','input',
-               'emitter-enabled','system-properties','emitter-properties','renderer-properties',
-               'add-sprite-renderer','add-ribbon-renderer','add-mesh-renderer','remove-renderer'}
+    contract=operation_contract()
     for op in ops:
-        if not isinstance(op,dict) or op.get('op') not in supported:raise ValueError('Unknown operation')
-        action=op['op']
-        required={'add-emitter':['emitter','template'],'remove-emitter':['emitter'],
-                  'add-module':['emitter','script','asset'],'remove-module':['emitter','script','module'],
-                  'input':['emitter','script','module','type','value'],
-                  'module-enabled':['emitter','script','module','value'],'emitter-enabled':['emitter','value'],
-                  'system-properties':['properties'],'emitter-properties':['emitter','properties'],
-                  'renderer-properties':['emitter','renderer','properties'],
-                  'add-sprite-renderer':['emitter'],'add-ribbon-renderer':['emitter'],
-                  'add-mesh-renderer':['emitter'],'remove-renderer':['emitter','renderer']}[action]
+        if not isinstance(op,dict) or op.get('op') not in contract:raise ValueError('Unknown operation')
+        action=op['op'];required=contract[action]
         if any(k not in op for k in required):raise ValueError('Missing field for '+action)
         if action.endswith('-enabled') and not isinstance(op['value'],bool):raise ValueError('enabled value must be boolean')
         if action.endswith('-properties') and not isinstance(op['properties'],dict):raise ValueError('properties must be an object')
-        if action=='input' and not (isinstance(op.get('input'),str) or isinstance(op.get('inputs'),list)):
+        if action in ('input','reset-input') and not (isinstance(op.get('input'),str) or isinstance(op.get('inputs'),list)):
             raise ValueError('input requires input name or inputs path')
+        if action in ('move-module','move-stage') and (type(op['index']) is not int or op['index']<0):raise ValueError('Invalid destination index')
         if 'renderer' in op and (type(op['renderer']) is not int or op['renderer']<0):raise ValueError('Invalid renderer index')
     return ops
 
-def edit(path,project,operation,asset_name,timeout,**fields):
+def backend_request(path,project,payload,timeout):
+    operation=payload['operation']
     state=path/'Saved/NiagaraStandalone';token=uuid.uuid4().hex
     request=state/(token+'.request.json');response=state/(token+'.response.json');log=state/(token+'-'+operation+'.log')
-    write_json(request,{'operation':operation,'asset':asset(asset_name),**fields})
+    write_json(request,payload)
     code,elapsed=run([editor(),project,'-run=NiagaraStandalone','-Request='+str(request),'-Response='+str(response),
                       '-NullRHI',*common()],path,env_for(path),log,timeout)
     result=load_json(response) if response.exists() else {'ok':False,'errors':['Backend did not write a response']}
     result.update({'backendExitCode':code,'wallSeconds':elapsed,'log':str(log)})
-    if code or not result.get('ok'):raise RuntimeError(json.dumps(result,ensure_ascii=False))
+    if code:result['ok']=False
+    if code or not result.get('ok'):raise BackendFailure(result)
     return result
+
+def edit(path,project,operation,asset_name,timeout,**fields):
+    return backend_request(path,project,{'operation':operation,'asset':asset(asset_name),**fields},timeout)
 
 def python_worker(path,project,script,timeout,request=None):
     token=uuid.uuid4().hex;state=path/'Saved/NiagaraStandalone';log=state/(token+'-assets.log')
@@ -155,13 +179,14 @@ def python_worker(path,project,script,timeout,request=None):
     if code or not result.get('ok'):raise RuntimeError(f'Asset worker failed ({code}): {result}; {log}')
     return result
 
-def cook(path,project,system,output,timeout):
+def cook(path,project,system,output,timeout,include=()):
     edit(path,project,'read',system,timeout)
     if output.exists():raise ValueError('Cook output exists; use a new directory')
     edit(path,project,'prepare-preview','/Game/NiagaraPreview/Preview',timeout)
     state=path/'Saved/NiagaraStandalone';token=uuid.uuid4().hex
     log=state/(token+'-cook.log')
-    code,_=run([editor(),project,'-run=Cook','-TargetPlatform='+PLATFORM,'-CookDir='+str(path/'Content'),
+    roots=list(dict.fromkeys([system,*include]))
+    code,_=run([editor(),project,'-run=Cook','-TargetPlatform='+PLATFORM,*['-Package='+asset(p) for p in roots],
                 '-Map=/Game/NiagaraPreview/Preview','-unversioned','-compressed','-SkipCookingEditorContent','-NullRHI',*common()],
                path,env_for(path),log,timeout)
     if code:raise RuntimeError('Native Cook failed: '+str(log))
@@ -179,7 +204,8 @@ def cook(path,project,system,output,timeout):
         code,_=run([unrealpak,project,pak,'-Extract',cache/'files',*common()],path,env_for(path),state/(token+'-extract.log'),timeout)
         if code:raise RuntimeError('Template extraction failed')
         (cache/'complete').write_text(digest)
-    merged={p.relative_to(cache/'files').as_posix():p for p in (cache/'files').rglob('*') if p.is_file()}
+    omitted=('NiagaraStandalone/Content/NiagaraDemo/','Engine/Plugins/FX/Niagara/Content/DefaultAssets/Templates/')
+    merged={p.relative_to(cache/'files').as_posix():p for p in (cache/'files').rglob('*') if p.is_file() and not p.relative_to(cache/'files').as_posix().startswith(omitted)}
     for p in cooked.rglob('*'):
         if p.is_file() and 'Metadata' not in p.relative_to(cooked).parts:merged[p.relative_to(cooked).as_posix()]=p
     response=state/(token+'-pak.txt')
@@ -189,6 +215,7 @@ def cook(path,project,system,output,timeout):
     if code:raise RuntimeError('Native Pak creation failed')
     os.replace(new,target)
     manifest={'schema':'niagara-runtime-package/1','engine':'5.8.1','platform':PLATFORM,'system':system,
+              'requestedPackages':roots,'cookScope':'requested packages and native dependency closure',
               'withEditor':False,'runtimeCompilation':False,'files':[]}
     for p in sorted(output.rglob('*')):
         if p.is_file() and p.name!='package-manifest.json':
@@ -226,10 +253,22 @@ def main():
     p.add_argument('--workspace',type=Path,default=ROOT/'workspace');p.add_argument('--timeout',type=int,default=1800)
     sub=p.add_subparsers(dest='command',required=True)
     sub.add_parser('capabilities');sub.add_parser('init')
+    sub.add_parser('api')
+    q=sub.add_parser('export');q.add_argument('--asset',required=True,type=asset);q.add_argument('--out',required=True,type=Path)
+    q=sub.add_parser('import');q.add_argument('--file',required=True,type=Path)
+    q=sub.add_parser('native-python');q.add_argument('--file',required=True,type=Path);q.add_argument('--params',type=Path)
+    q=sub.add_parser('catalog');q.add_argument('--kind',required=True,choices=['systems','emitters','modules','dynamic-inputs','renderers','data-interfaces','stage-classes','materials','textures','meshes','assets'])
+    q.add_argument('--class',dest='class')
+    q.add_argument('--search',default='');q.add_argument('--root',default='/');q.add_argument('--offset',type=int,default=0);q.add_argument('--limit',type=int,default=200);q.add_argument('--out',type=Path)
+    q=sub.add_parser('schema');q.add_argument('--kind',required=True,choices=['asset','system','emitter','module','dynamic-input','renderer','data-interface','stage','instance','input','stacks'])
+    q.add_argument('--asset');q.add_argument('--emitter');q.add_argument('--script');q.add_argument('--module');q.add_argument('--inputs',nargs='+');q.add_argument('--out',type=Path)
+    q.add_argument('--usage-id',dest='usageId')
+    q=sub.add_parser('import-assets');q.add_argument('--source',required=True,type=Path)
     for name in ('create','read','edit','save','compile'):
         q=sub.add_parser(name);q.add_argument('--asset',required=True,type=asset);q.add_argument('--out',type=Path)
         if name in ('create','edit'):q.add_argument('--recipe',type=Path,required=name=='edit')
-        if name=='create':q.add_argument('--template')
+        if name=='create':q.add_argument('--template');q.add_argument('--asset-kind',dest='assetKind',choices=['system','emitter'],default='system')
+        q.add_argument('--compile-policy',dest='compilePolicy',choices=['require-valid','allow-errors','defer'],default='require-valid')
     q=sub.add_parser('import-texture');q.add_argument('--file',required=True,type=Path);q.add_argument('--asset',required=True,type=asset)
     q.add_argument('--linear',action='store_true')
     q=sub.add_parser('create-material');q.add_argument('--asset',required=True,type=asset);q.add_argument('--texture',required=True,type=asset)
@@ -238,26 +277,61 @@ def main():
         if name=='demo':q.add_argument('--effect',choices=sorted(DEMOS),default='fountain')
         if name!='demo':q.add_argument('--asset',required=True,type=asset)
         if name in ('cook','render'):q.add_argument('--package',required=True,type=Path)
+        if name=='cook':q.add_argument('--include',action='append',type=asset,default=[])
         if name!='cook':
             q.add_argument('--out',required=True,type=Path);q.add_argument('--cpu-vulkan',action='store_true')
             q.add_argument('--frames',type=int,default=60);q.add_argument('--warmup',type=int,default=16)
             q.add_argument('--width',type=int,default=512);q.add_argument('--height',type=int,default=512)
     args=p.parse_args()
     if not 1<=args.timeout<=7200:raise ValueError('timeout must be 1..7200')
+    if args.command=='api':return {'ok':True,'schema':'ue-niagara-authoring-api/1',
+        'operations':{name:{'required':['op',*fields]} for name,fields in operation_contract().items()},
+        'inputModes':['float','int','bool','vec2','vec3','position','color','enum','struct','linked','dynamic-input','data-interface','object','expression'],
+        'variableDefaults':['float','int','bool','vec2','vec3','position','color','enum','struct','data-interface','object'],
+        'nativeSchemaQueries':['asset','system','emitter','renderer','data-interface','stage','module','dynamic-input','instance','input','stacks'],
+        'scriptReferences':{'standard':'script enum name','eventAndSimulation':'script enum name + usageId GUID'},
+        'assets':{'newEmitter':'add-emitter without asset/template','standaloneEmitter':'create --asset-kind emitter; read/edit auto-detect native class','reuseEmitter':'add-emitter with asset path','modules':'existing native Module Script assets, discovered by catalog'},
+        'documents':{'schema':'ue-niagara-document/1','export':'export --asset /Game/... --out document.json',
+                     'import':'import --file document.json','identity':'original package paths; import refuses collisions',
+                     'preserves':['object graph','pins and links','scratch scripts','project Niagara dependencies','inheritance','package and editor metadata'],
+                     'nativeData':'per-object current-build archive; properties are explicit text overlays; resource assets are checked attachments'},
+        'execution':'UE native compiler and runtime; no standalone replacement VM',
+        'nativePython':'Explicit script file using bundled unreal API; script owns save/transaction boundaries'}
     if args.command=='capabilities':return {'ok':True,'engine':'5.8.1','platform':PLATFORM,'nativeNiagara':True,
-        'headlessEditorBundled':True,'withUnrealEd':True,'previewWithEditor':False,'create':'template/recipe',
-        'demos':list(DEMOS),'demoSimTargets':{'gpu':'GPUComputeSim','ribbon':'CPUSim','mesh':'CPUSim','fountain':'CPUSim'},
-        'serialization':['native uasset','ue-niagara-snapshot/1','ue-niagara-recipe/1'],
+        'headlessEditorBundled':True,'withUnrealEd':True,'previewWithEditor':False,'create':'empty assets with optional existing-asset reuse',
+        'emptyEmitterCreation':True,'emitterTemplatesRequired':False,'assignmentModules':True,
+        'scriptStackIdentity':'usage + usageId','compilePolicies':['require-valid','allow-errors','defer'],
+        'nativePythonAuthoring':True,'legacyDemos':list(DEMOS),'templateAssetsBundled':(ENGINE/'Plugins/FX/Niagara/Content/DefaultAssets/Templates').is_dir(),
+        'demoSimTargets':{'gpu':'GPUComputeSim','ribbon':'CPUSim','mesh':'CPUSim','fountain':'CPUSim'},
+        'serialization':['native uasset','ue-niagara-snapshot/1','ue-niagara-recipe/1','ue-niagara-document/1'],
         'limitations':['Snapshots describe native graphs; they are not a cross-engine particle format.',
                        'Plugin-specific assets require matching plugins. Scene-dependent interfaces need a supplied scene.',
                        'Renderer demos cover GPU Sprite and CPU Ribbon/Mesh; GPU Ribbon/Mesh and Fluids require separate qualification.']}
     if args.command=='render':path=project=None
     else:path,project=workspace(args.workspace)
     if args.command=='init':return {'ok':True,'workspace':str(path)}
+    if args.command=='export':
+        from document_io import export_document
+        return export_document(backend_request,path,project,args.asset,args.out,args.timeout)
+    if args.command=='import':
+        from document_io import import_document
+        return import_document(backend_request,path,project,args.file,args.timeout)
+    if args.command=='native-python':
+        return python_worker(path,project,'native_python_worker.py',args.timeout,{'file':str(args.file.resolve()),'params':load_json(args.params) if args.params else {}})
+    if args.command=='import-assets':
+        return python_worker(path,project,'assets_worker.py',args.timeout,{'operation':'import-assets','source':str(args.source.resolve())})
+    if args.command in ('catalog','schema'):
+        payload={k:v for k,v in vars(args).items() if k not in ('command','workspace','timeout','out') and v is not None}
+        payload['operation']=args.command
+        if args.command=='catalog' and (args.offset<0 or not 1<=args.limit<=5000):raise ValueError('Invalid catalog page')
+        result=backend_request(path,project,payload,args.timeout)
+        if args.out:write_json(args.out,result)
+        return result
     if args.command in ('create','read','edit','save','compile'):
-        fields={}
+        fields={'compilePolicy':args.compilePolicy}
         if getattr(args,'recipe',None):fields['operations']=operations(args.recipe)
         if getattr(args,'template',None):fields['template']=args.template
+        if getattr(args,'assetKind',None):fields['assetKind']=args.assetKind
         result=edit(path,project,args.command,args.asset,args.timeout,**fields)
         if args.out:write_json(args.out,result)
         return result
@@ -266,11 +340,13 @@ def main():
         if args.command=='import-texture':req.update({'file':str(args.file.resolve()),'linear':args.linear})
         else:req['texture']=args.texture
         return python_worker(path,project,'assets_worker.py',args.timeout,req)
-    if args.command=='cook':return cook(path,project,args.asset,args.package.resolve(),args.timeout)
+    if args.command=='cook':return cook(path,project,args.asset,args.package.resolve(),args.timeout,args.include)
     if not (1<=args.frames<=36000 and 1<=args.warmup<=4096 and 64<=args.width<=4096 and 64<=args.height<=4096):
         raise ValueError('Invalid simulation frame count or render size')
     out=args.out.resolve()
     if args.command=='demo':
+        if not (ROOT/'examples'/DEMOS[args.effect]).is_file():
+            raise ValueError('Legacy preset demos are not shipped in the template-free kit. Use catalog/schema and create/edit, or run the developer acceptance tool.')
         args.asset='/Game/NiagaraDemo/NS_'+args.effect.title()+'_'+uuid.uuid4().hex[:8]
         result=edit(path,project,'create',args.asset,args.timeout,operations=operations(ROOT/'examples'/DEMOS[args.effect]))
         write_json(out.with_suffix('.asset.json'),result)
@@ -281,5 +357,7 @@ def main():
 
 if __name__=='__main__':
     try:print(json.dumps(main(),ensure_ascii=False,indent=2))
+    except BackendFailure as exc:
+        print(json.dumps(exc.result,ensure_ascii=False,indent=2));sys.exit(1)
     except (RuntimeError,ValueError,OSError,KeyError) as exc:
         print(json.dumps({'ok':False,'error':str(exc)},ensure_ascii=False,indent=2));sys.exit(1)

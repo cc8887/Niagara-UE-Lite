@@ -58,3 +58,29 @@ The source-patched commandlet service profile, editor-module dependency pass and
 platform-specific rebuild helpers are described in
 [editor-backend-profile.md](editor-backend-profile.md). Source compilation and
 static closure checks do not replace extracted-package native qualification.
+
+## Generic authoring and JSON document profile
+
+`patch_ue58_general_authoring.py` exports the existing native stack-edit services.
+`patch_ue58_stack_identity.py` preserves Event/Simulation Stage usage GUIDs in the
+native bridge. Apply these only to a task-owned UE 5.8.1 source copy, rebuild
+NiagaraEditor, and then rebuild the project worker. The Linux helpers
+`build_general_authoring_linux.py --stack-identity` and
+`build_authoring_worker_linux.py` reuse matching UBT responses outside the source
+engine; the former rewrites both unity includes and response-file source paths.
+
+For a previously qualified curated kit whose native workers were updated and
+qualified, use `package_profile.py --source <kit> --out <new-stage>` to preserve
+its curated module selection. Supply the matching LLVM objcopy using
+`--strip-tool` on Linux, and repeat `--private-root` for local build prefixes.
+It excludes optional DDC and effect presets, strips only distributable ELF copies,
+deduplicates Linux libraries, removes old cooked fixture effects, refreshes the
+portable frontend/docs and freezes a file list. Never use a test workspace as
+the profile source.
+
+Seal with `package_standalone.py --seal`. Set `NIAGARA_PACKAGE_SOURCE_COMMIT` and
+`NIAGARA_PACKAGE_RELEASE` to record provenance. Qualify from the final extracted
+archive using `acceptance_template_free.py`, `acceptance_document.py` and
+`acceptance_document_edits.py`; include real Cook/render evidence. Optional DDC
+remains a separate release asset. `audit_source.py --staged` rejects binary assets,
+archives, host absolute paths and credential-like tokens before committing.

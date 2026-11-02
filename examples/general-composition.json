@@ -1,0 +1,41 @@
+{
+  "schema": "ue-niagara-recipe/1",
+  "operations": [
+    {
+      "op": "add-emitter",
+      "emitter": "Confetti",
+      "template": "/Niagara/DefaultAssets/Templates/Emitters/ConfettiBurst.ConfettiBurst"
+    },
+    {
+      "op": "add-emitter",
+      "emitter": "Dust",
+      "template": "/Niagara/DefaultAssets/Templates/Emitters/Minimal.Minimal"
+    },
+    {
+      "op": "add-module",
+      "emitter": "Dust",
+      "script": "EmitterUpdateScript",
+      "asset": "/Niagara/Modules/Emitter/SpawnRate.SpawnRate"
+    },
+    {
+      "op": "input",
+      "emitter": "Dust",
+      "script": "EmitterUpdateScript",
+      "module": "SpawnRate",
+      "input": "SpawnRate",
+      "type": "float",
+      "value": 50
+    },
+    {
+      "op": "set-user",
+      "name": "User.Gravity",
+      "type": "vec3",
+      "value": [0, 0, -120]
+    },
+    {
+      "op": "emitter-properties",
+      "emitter": "Confetti",
+      "properties": {"bDeterminism": true, "RandomSeed": 1337}
+    }
+  ]
+}

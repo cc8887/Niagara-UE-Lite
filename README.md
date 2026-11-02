@@ -7,6 +7,21 @@ UE 5.8.1 原生 Niagara standalone CLI：创建、读取、编辑、编译、保
 使用者无需另装 UE、Python 或 C++ SDK。生成的纯 Runtime 预览目录不包含编辑器。
 Windows 使用 D3D12/SM6；Linux 使用 Vulkan/SM6。
 
+preview.6 以通用原生编辑操作为入口：AI 可以从空 System 或独立 Emitter
+开始，检索已有模块、动态输入和资源，查询 Schema，再添加、配置、保存和 Cook。
+创建不要求模板，默认封包也不再携带发射器模板或预置效果。
+接口和实际覆盖边界见
+[template-free-authoring.md](docs/template-free-authoring.md)。
+
+新增 JSON 对象文档的 `export` / `import`，恢复内部图、Scratch Pad、
+继承依赖和编辑器数据，并支持显式属性修改与资源附件。格式保留每个对象的
+原生序列化扩展，要求匹配引擎构建；使用方法与验收边界见
+[json-round-trip.md](docs/json-round-trip.md)。
+
+双平台独立包及校验文件发布在
+[preview.6 Release](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.1.0-preview.6)。
+仓库保持私有；可执行文件、缓存和压缩包通过 Release 附件分发。
+
 基础包按程序白名单和原生资产引用清单裁剪；预热 DDC 为可选下载。未安装缓存
 时仍能创建、编辑、保存和 Cook，首次编译会更慢。缓存安装位置与资源边界见
 [curation.md](docs/curation.md)。
@@ -28,27 +43,31 @@ Windows 使用 D3D12/SM6；Linux 使用 Vulkan/SM6。
 
 ```sh
 ./niagara-cli capabilities
+./niagara-cli api
 ./niagara-cli --workspace ./work init
-./niagara-cli --workspace ./work create --asset /Game/Demo/NS_Fountain --recipe examples/fountain.json
-./niagara-cli --workspace ./work read --asset /Game/Demo/NS_Fountain --out fountain.json
-./niagara-cli --workspace ./work edit --asset /Game/Demo/NS_Fountain --recipe examples/fountain-orange.json
-./niagara-cli --workspace ./work save --asset /Game/Demo/NS_Fountain
-./niagara-cli --workspace ./work build --asset /Game/Demo/NS_Fountain --out outputs/fountain.png
+./niagara-cli --workspace ./work create --asset /Game/Demo/MySystem
+./niagara-cli --workspace ./work catalog --kind modules --search Spawn
+./niagara-cli --workspace ./work edit --asset /Game/Demo/MySystem --recipe operations.json
+./niagara-cli --workspace ./work read --asset /Game/Demo/MySystem --out snapshot.json
+./niagara-cli --workspace ./work save --asset /Game/Demo/MySystem
+./niagara-cli --workspace ./work build --asset /Game/Demo/MySystem --out outputs/frame.png
 ```
 
 `build` 执行 Cook、Pak 和渲染。也可以分开运行：
 
 ```sh
-./niagara-cli --workspace ./work cook --asset /Game/Demo/NS_Fountain --package outputs/runtime
-./niagara-cli render --package outputs/runtime --asset /Game/Demo/NS_Fountain --frames 60 --out outputs/frame.png
-./niagara-cli --workspace ./work demo --out outputs/demo.png
+./niagara-cli --workspace ./work cook --asset /Game/Demo/MySystem --package outputs/runtime
+./niagara-cli render --package outputs/runtime --asset /Game/Demo/MySystem --frames 60 --out outputs/frame.png
 ```
 
 Linux 无 GPU 时，加 `--cpu-vulkan`，需要满足 UE Vulkan SM6 的 Mesa lavapipe
 驱动。CPU 粒子仿真和 CPU Vulkan 渲染是两个独立概念；`--cpu-vulkan` 会检测并
 选择 CPU Vulkan 设备，不会用其他绘图库生成替代图像。
 
-新增演示入口包括 GPU Sprite、CPU Ribbon 和 CPU Mesh Renderer。Windows：
+<details>
+<summary>历史 preview.5 模板演示（当前无模板封包不携带这些配方）</summary>
+
+旧版演示入口包括 GPU Sprite、CPU Ribbon 和 CPU Mesh Renderer。Windows：
 
 ```powershell
 .\niagara-cli.exe --workspace .\work demo --effect gpu --out .\outputs\gpu.png
@@ -75,6 +94,8 @@ Linux 使用同样的 `--effect` 选项；软件 Vulkan 示例：
 `UpwardMeshBurst`。Mesh 示例使用 `S_Gnomon`；Ribbon 与 Mesh 材质均为原生 Unlit
 材质，因此不要求演示场景额外放置灯光。
 
+</details>
+
 运行元数据区分 `simTarget`、Renderer 类和 RHI 设备。CPU 粒子数直接读取数据集；
 GPU 粒子数在截图保存后从原生 GPU 缓冲读回，并报告 `particleCountSource`、
 `particleCountExact` 和 `gpuReadbackCompleted`。读回不参与已经保存的图像生成，
@@ -99,12 +120,11 @@ Renderer。支持 PNG/JPEG/TGA/BMP/EXR/HDR 的 UE TextureFactory 导入，也支
 文本接口有两种明确用途：
 
 - `ue-niagara-snapshot/1`：读取原生拓扑、参数值、动态值类型、渲染器和编译状态。
-- `ue-niagara-recipe/1`：通过原生模板、模块与编辑操作创建或修改资产。
+- `ue-niagara-recipe/1`：通过通用原生编辑操作创建或修改资产，可选择复用已有资产。
 
-Renderer 创建操作为 `add-sprite-renderer`、`add-ribbon-renderer`、
-`add-mesh-renderer`；均指定 `emitter`。通过 `renderer-properties` 设置原生材质、
-网格、朝向等属性，通过 `remove-renderer` 删除指定索引。Ribbon 与 Mesh 配方
-实际执行了删除模板 Renderer、重新添加并配置 Renderer 的流程。
+Renderer 可通过 `add-renderer` 指定原生类；也保留 `add-sprite-renderer`、
+`add-ribbon-renderer`、`add-mesh-renderer` 便捷操作。通过 `renderer-properties`
+设置原生材质、网格、朝向等属性，通过 `remove-renderer` 删除指定索引。
 
 Snapshot 不是通用粒子解释器格式，也不承诺任意 Niagara 图可由 JSON 无损重建。
 完整编辑资产保留在 `.uasset`。纯 Runtime 消费 Cook 后的字节码和 ShaderMap。
