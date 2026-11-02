@@ -8,7 +8,7 @@ import argparse,hashlib,json,os,subprocess,sys,tempfile
 from pathlib import Path
 from package_support import copy,SOURCE_PREFIXES
 from slim_package import exclusion,library,stripped_copy,sha
-from package_standalone import NAME
+from package_standalone import NAME,generated_path
 
 REPO=Path(__file__).resolve().parents[1]
 TOP={'backend','Project','runtime-template','scripts','docs'}
@@ -64,7 +64,9 @@ def main():
             if not canonical.resolve().is_relative_to(dest) or not canonical.is_file():raise ValueError('Invalid runtime link')
             row.update(bytes=canonical.stat().st_size,sha256=sha(canonical))
         links.write_text(json.dumps(mapping,indent=2)+'\n')
-    actual=[f.relative_to(dest).as_posix() for f in sorted(dest.rglob('*')) if f.is_file()]
+    # Native UnrealPak can create Saved/config/log files during scaffold pruning.
+    # Keep those new scratch files outside the immutable archive selection too.
+    actual=[f.relative_to(dest).as_posix() for f in sorted(dest.rglob('*')) if f.is_file() and not generated_path(f,dest)]
     (dest.parent/(NAME+'-file-list.json')).write_text(json.dumps(actual,indent=2)+'\n')
     audit={'platform':platform,'files':len(actual),'removed':removed,'stripSavedBytes':stripped,'libraryHardlinks':hardlinks,
            'profile':'curated native editor/cook + shipping runtime; no effect presets; optional DDC excluded'}
