@@ -19,11 +19,16 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--source',required=True,type=Path);p.add_argument('--out',required=True,type=Path)
     p.add_argument('--private-root',action='append',default=[]);p.add_argument('--strip-tool',default='llvm-objcopy')
+    p.add_argument('--trim-material-authoring',action='store_true',help='Trim unreferenced material/texture UI modules and inactive ICU data copies')
     a=p.parse_args();source=a.source.resolve();dest=a.out.resolve()
     if dest.exists() or source==dest or source.is_relative_to(dest) or dest.is_relative_to(source):p.error('New independent stage required')
     platform='Windows' if os.name=='nt' else 'Linux'
     original=json.loads((source/'package-manifest.json').read_text(encoding='utf8'))
     if original['platform']!=platform:p.error('Build on the target platform')
+    material_plan=None
+    if a.trim_material_authoring:
+        from material_profile import plan
+        material_plan=plan(source,original)
     roots=[str(source),str(dest),str(REPO),*a.private_root]
     for root in roots:SOURCE_PREFIXES.extend([root,root.replace('\\','/'),root.replace('/','\\')])
     dest.mkdir(parents=True);removed=[];included=[];dedup={};hardlinks=0;stripped=0
@@ -33,6 +38,7 @@ def main():
         if rel.parts[0] not in TOP and name not in ROOT_FILES:continue
         if not file.resolve().is_relative_to(source):raise ValueError('Source symlink escapes profile: '+name)
         reason=exclusion(name,platform)
+        if material_plan and name in material_plan['reasons']:reason=material_plan['reasons'][name]
         if name.startswith(('examples/','Project/Content/NiagaraDemo/')) or '/Content/DefaultAssets/Templates/' in name:reason='effect_presets'
         if 'Source' in rel.parts:reason='developer_source'
         if reason:removed.append({'path':name,'reason':reason});continue
@@ -54,6 +60,11 @@ def main():
         copy(REPO/'tools'/name,dest/'scripts'/name)
     for file in sorted((REPO/'docs').rglob('*.md')):copy(file,dest/'docs'/file.relative_to(REPO/'docs'))
     copy(REPO/'README.md',dest/'README.md')
+    if material_plan:
+        for file in dest.rglob('*.modules'):
+            data=json.loads(file.read_text())
+            for name in material_plan['removedModuleNames']:data.get('Modules',{}).pop(name,None)
+            file.write_text(json.dumps(data,indent=2)+'\n')
     with tempfile.TemporaryDirectory(prefix='niagara-profile-') as scratch:
         subprocess.run([sys.executable,str(REPO/'tools/prune_runtime_fixtures.py'),'--kit',str(dest),'--work',str(Path(scratch)/'prune')],check=True)
     links=dest/'runtime-template-links.json'
@@ -71,6 +82,7 @@ def main():
     audit={'platform':platform,'files':len(actual),'removed':removed,'stripSavedBytes':stripped,'libraryHardlinks':hardlinks,
            'profile':'curated native editor/cook + shipping runtime; no effect presets; optional DDC excluded'}
     (dest.parent/(platform.lower()+'-profile-audit.json')).write_text(json.dumps(audit,indent=2)+'\n')
+    if material_plan:(dest.parent/(platform.lower()+'-material-profile.json')).write_text(json.dumps(material_plan,indent=2)+'\n')
     print(json.dumps({k:v for k,v in audit.items() if k!='removed'}),flush=True)
 
 

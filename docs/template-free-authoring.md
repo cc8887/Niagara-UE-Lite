@@ -50,7 +50,7 @@ and `Engine` are native reserved namespaces and cannot name an emitter.
 | Parameters | User parameters; generic native Set Parameters modules and attribute assignments |
 | Extra stacks | CPU Event Handler CRUD; GPU Simulation Stage CRUD, order/enable/properties, distinct usage GUID identity |
 | Renderers | Discover classes, create/remove/configure native Renderer objects, assign material and mesh assets |
-| Resources | Texture import, material creation, discover/reference texture/material/mesh assets |
+| Resources | Texture import, compatible existing-asset import, discover/reference texture/material/mesh assets; no material creation |
 | Output | Compile, targeted offline Cook with dependency closure, native UE simulation/rendering, PNG and runtime metadata |
 
 Use `schema --kind stacks` for usage IDs and `schema --kind stage` for properties.

@@ -7,7 +7,7 @@ UE 5.8.1 原生 Niagara standalone CLI：创建、读取、编辑、编译、保
 使用者无需另装 UE、Python 或 C++ SDK。生成的纯 Runtime 预览目录不包含编辑器。
 Windows 使用 D3D12/SM6；Linux 使用 Vulkan/SM6。
 
-preview.6 以通用原生编辑操作为入口：AI 可以从空 System 或独立 Emitter
+preview.7 以通用原生编辑操作为入口：AI 可以从空 System 或独立 Emitter
 开始，检索已有模块、动态输入和资源，查询 Schema，再添加、配置、保存和 Cook。
 创建不要求模板，默认封包也不再携带发射器模板或预置效果。
 接口和实际覆盖边界见
@@ -19,8 +19,12 @@ preview.6 以通用原生编辑操作为入口：AI 可以从空 System 或独�
 [json-round-trip.md](docs/json-round-trip.md)。
 
 双平台独立包及校验文件发布在
-[preview.6 Release](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.1.0-preview.6)。
+[preview.7 Release](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.1.0-preview.7)。
 仓库保持私有；可执行文件、缓存和压缩包通过 Release 附件分发。
+
+preview.7 删除材质创建功能，仅加载、绑定和 Cook 外部已有材质；同时裁剪无入边的
+材质/贴图 UI 模块和未使用的 ICU 数据副本。依赖证据及边界见
+[material-boundary.md](docs/material-boundary.md)。
 
 基础包按程序白名单和原生资产引用清单裁剪；预热 DDC 为可选下载。未安装缓存
 时仍能创建、编辑、保存和 Cook，首次编译会更慢。缓存安装位置与资源边界见
@@ -105,14 +109,16 @@ GPU 粒子数在截图保存后从原生 GPU 缓冲读回，并报告 `particleC
 `Saved/NiagaraStandalone/Backups`。创建时拒绝覆盖，操作失败不保存主资产。
 每个命令使用独立后端进程；首轮无缓存 Cook 可能需要数分钟。
 
-贴图与原生材质：
+贴图导入与已有材质绑定：
 
 ```sh
 ./niagara-cli --workspace ./work import-texture --file texture.png --asset /Game/Demo/T_Particle
-./niagara-cli --workspace ./work create-material --texture /Game/Demo/T_Particle --asset /Game/Demo/M_Particle
+./niagara-cli --workspace ./work catalog --kind materials
 ```
 
-然后用 `renderer-properties` 的 `Material` 字段把材质对象路径绑定到发射器
+材质由外部工具制作，通过 `import-assets` 导入兼容的资产及依赖，或选择包内已有
+材质。此工具不提供创建材质、编辑材质节点图的接口。用 `renderer-properties`
+的 `Material` 字段把材质对象路径绑定到发射器
 Renderer。支持 PNG/JPEG/TGA/BMP/EXR/HDR 的 UE TextureFactory 导入，也支持
 匹配 UE 5.8.1、未 Cook 的标准 Texture2D `.uasset` 和同名 `.uexp` / `.ubulk`。
 原生资产导入需要保留文件名；额外插件、外部虚拟化数据不在此导入范围内。

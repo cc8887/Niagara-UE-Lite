@@ -12,6 +12,10 @@ import sys
 import time
 import uuid
 
+# The public protocol is UTF-8 JSON, including redirected Windows output.
+for stream in (sys.stdout,sys.stderr):
+    if hasattr(stream,'reconfigure'):stream.reconfigure(encoding='utf-8')
+
 ROOT=Path(__file__).resolve().parents[1]
 WIN=sys.platform=='win32'
 PLATFORM='Windows' if WIN else 'Linux'
@@ -271,7 +275,6 @@ def main():
         q.add_argument('--compile-policy',dest='compilePolicy',choices=['require-valid','allow-errors','defer'],default='require-valid')
     q=sub.add_parser('import-texture');q.add_argument('--file',required=True,type=Path);q.add_argument('--asset',required=True,type=asset)
     q.add_argument('--linear',action='store_true')
-    q=sub.add_parser('create-material');q.add_argument('--asset',required=True,type=asset);q.add_argument('--texture',required=True,type=asset)
     for name in ('cook','render','build','demo'):
         q=sub.add_parser(name)
         if name=='demo':q.add_argument('--effect',choices=sorted(DEMOS),default='fountain')
@@ -300,6 +303,7 @@ def main():
     if args.command=='capabilities':return {'ok':True,'engine':'5.8.1','platform':PLATFORM,'nativeNiagara':True,
         'headlessEditorBundled':True,'withUnrealEd':True,'previewWithEditor':False,'create':'empty assets with optional existing-asset reuse',
         'emptyEmitterCreation':True,'emitterTemplatesRequired':False,'assignmentModules':True,
+        'materialAuthoring':False,'existingMaterialBinding':True,'textureImport':True,
         'scriptStackIdentity':'usage + usageId','compilePolicies':['require-valid','allow-errors','defer'],
         'nativePythonAuthoring':True,'legacyDemos':list(DEMOS),'templateAssetsBundled':(ENGINE/'Plugins/FX/Niagara/Content/DefaultAssets/Templates').is_dir(),
         'demoSimTargets':{'gpu':'GPUComputeSim','ribbon':'CPUSim','mesh':'CPUSim','fountain':'CPUSim'},
@@ -335,10 +339,9 @@ def main():
         result=edit(path,project,args.command,args.asset,args.timeout,**fields)
         if args.out:write_json(args.out,result)
         return result
-    if args.command in ('import-texture','create-material'):
+    if args.command=='import-texture':
         req={'operation':args.command,'asset':args.asset}
-        if args.command=='import-texture':req.update({'file':str(args.file.resolve()),'linear':args.linear})
-        else:req['texture']=args.texture
+        req.update({'file':str(args.file.resolve()),'linear':args.linear})
         return python_worker(path,project,'assets_worker.py',args.timeout,req)
     if args.command=='cook':return cook(path,project,args.asset,args.package.resolve(),args.timeout,args.include)
     if not (1<=args.frames<=36000 and 1<=args.warmup<=4096 and 64<=args.width<=4096 and 64<=args.height<=4096):

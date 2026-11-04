@@ -1,4 +1,4 @@
-"""Native UE texture import and Niagara sprite-material authoring."""
+"""Native UE texture and compatible existing-asset import."""
 import json
 import os
 from pathlib import Path
@@ -50,6 +50,7 @@ def import_native_assets(q):
 
 def execute(q):
     if q['operation']=='import-assets':return import_native_assets(q)
+    if q['operation']!='import-texture':raise ValueError('Unknown asset operation')
     target=q['asset'];folder,name=target.rsplit('/',1)
     if not re.fullmatch(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*',target):raise ValueError('Invalid /Game asset path')
     relative_folder=folder[len('/Game'):].lstrip('/')
@@ -87,28 +88,6 @@ def execute(q):
         data=obj.get_editor_property('asset_import_data')
         relative=os.path.relpath(dest,Path(ue.Paths.project_content_dir())/relative_folder)
         data.scripted_add_filename(relative,0,source.name)
-    elif q['operation']=='create-material':
-        tex=ue.load_asset(q['texture'])
-        if not isinstance(tex,ue.Texture2D):raise ValueError('Expected native Texture2D asset')
-        obj=tools.create_asset(name,folder,ue.Material,ue.MaterialFactoryNew())
-        obj.set_editor_property('blend_mode',ue.BlendMode.BLEND_TRANSLUCENT)
-        obj.set_editor_property('shading_model',ue.MaterialShadingModel.MSM_UNLIT)
-        obj.set_editor_property('two_sided',True)
-        obj.set_editor_property('used_with_niagara_sprites',True)
-        m=ue.MaterialEditingLibrary
-        sample=m.create_material_expression(obj,ue.MaterialExpressionTextureSample,-600,0)
-        sample.set_editor_property('texture',tex)
-        particle=m.create_material_expression(obj,ue.MaterialExpressionParticleColor,-600,220)
-        color=m.create_material_expression(obj,ue.MaterialExpressionMultiply,-300,0)
-        alpha=m.create_material_expression(obj,ue.MaterialExpressionMultiply,-300,220)
-        assert m.connect_material_expressions(sample,'RGB',color,'A')
-        assert m.connect_material_expressions(particle,'RGB',color,'B')
-        assert m.connect_material_expressions(sample,'A',alpha,'A')
-        assert m.connect_material_expressions(particle,'A',alpha,'B')
-        assert m.connect_material_property(color,'',ue.MaterialProperty.MP_EMISSIVE_COLOR)
-        assert m.connect_material_property(alpha,'',ue.MaterialProperty.MP_OPACITY)
-        m.recompile_material(obj)
-    else:raise ValueError('Unknown asset operation')
     if not ue.EditorLoadingAndSavingUtils.save_packages([obj.get_outermost()],False):raise RuntimeError('Native save failed')
     return {'ok':True,'asset':obj.get_path_name(),'class':obj.get_class().get_name(),'saved':True}
 

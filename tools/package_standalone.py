@@ -132,6 +132,7 @@ def seal(dest,make_archive,private_roots):
     if os.environ.get('NIAGARA_PACKAGE_RELEASE'):manifest['release']=os.environ['NIAGARA_PACKAGE_RELEASE']
     manifest['authoringDocumentSchema']='ue-niagara-document/1'
     manifest['emitterTemplatesRequired']=False
+    manifest['materialAuthoring']=False
     (dest/'package-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
     summary={k:v for k,v in manifest.items() if k!='records'};summary['files']=len(files)+1
     if make_archive:

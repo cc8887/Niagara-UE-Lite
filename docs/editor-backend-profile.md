@@ -3,7 +3,7 @@
 The standalone backend still contains UnrealEd and NiagaraEditor. This profile
 removes MainFrame, Persona and independently unneeded editor/target-platform
 libraries while preserving native Niagara graph edits, package serialization,
-texture import, material creation, Cook and Shipping rendering.
+texture import, existing material loading/binding, Cook and Shipping rendering.
 
 Every frontend backend invocation includes `-NiagaraLiteBackend`. It selects
 non-visual services in the matching source-patched UE 5.8.1 modules. Running the
@@ -93,7 +93,7 @@ Report base and base-plus-DDC download sizes separately.
 ## Qualification
 
 Require native create/edit/save/independent-process reload, image and compatible
-uncooked texture import, native material creation/binding, and uncached Cook.
+uncooked texture import, existing material loading/binding, and uncached Cook.
 Move only the newly copied preview-map fixture out of a fresh test workspace
 before Cook, to prove that the native world creation/save path works.
 

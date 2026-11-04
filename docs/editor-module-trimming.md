@@ -12,6 +12,10 @@ uses the [commandlet service profile](editor-backend-profile.md); references to
 the Python preview author and EditorScriptingUtilities below describe that
 baseline, not the current native preview creation path.
 
+Material creation belonged to that historical prototype and was removed in
+preview.7. The current tool imports/binds existing materials; retained shared
+engine dependencies are documented in [material-boundary.md](material-boundary.md).
+
 ## Measured occupancy
 
 The Windows figures come from members of the actual published ZIP. Linux

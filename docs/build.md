@@ -84,3 +84,8 @@ archive using `acceptance_template_free.py`, `acceptance_document.py` and
 `acceptance_document_edits.py`; include real Cook/render evidence. Optional DDC
 remains a separate release asset. `audit_source.py --staged` rejects binary assets,
 archives, host absolute paths and credential-like tokens before committing.
+
+For preview.7's existing-material-only distribution, add
+`--trim-material-authoring` to `package_profile.py`. The emitted material-profile
+report records native incoming-module imports and active ICU data-version
+evidence; never delete MaterialEditor merely because the creation command is gone.
