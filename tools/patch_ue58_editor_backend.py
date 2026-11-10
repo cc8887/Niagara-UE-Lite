@@ -117,8 +117,8 @@ def main():
     p.add_argument('--report',type=Path)
     a=p.parse_args();engine=a.engine.resolve()
     version=json.loads((engine/'Build/Build.version').read_text())
-    if [version[k] for k in ('MajorVersion','MinorVersion','PatchVersion')]!=[5,8,1]:
-        raise ValueError('Matching UE 5.8.1 required')
+    if tuple(version[k] for k in ('MajorVersion','MinorVersion','PatchVersion')) not in ((5,8,1),(5,9,0)):
+        raise ValueError('Matching UE 5.8.1 or 5.9.0 required')
     changes=transform(engine);rows=[]
     for relative,text in changes.items():
         path=engine/relative;original=path.read_bytes();data=text.encode('utf-8')

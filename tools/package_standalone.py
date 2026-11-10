@@ -16,7 +16,9 @@ ROOT=Path(__file__).resolve().parents[1]
 WIN=sys.platform=='win32'
 PLATFORM='Windows' if WIN else 'Linux'
 BIN='Win64' if WIN else 'Linux'
-NAME='Niagara-UE-Lite-Standalone-UE5.8.1-'+PLATFORM+'-x86_64'
+ENGINE_VERSION=os.environ.get('NIAGARA_PACKAGE_ENGINE_VERSION','5.8.1')
+if ENGINE_VERSION not in ('5.8.1','5.9.0'):raise ValueError('Unsupported package engine version')
+NAME='Niagara-UE-Lite-Standalone-UE'+ENGINE_VERSION+'-'+PLATFORM+'-x86_64'
 GENERATED_DIRS={'Saved','Intermediate','DerivedDataCache','__pycache__'}
 
 def generated_path(path,root):
@@ -25,7 +27,7 @@ def generated_path(path,root):
 def stage(dest,engine,project,runtime,resume):
     if dest.exists() and not resume:raise ValueError('Stage exists; overwrite refused')
     version=json.loads((engine/'Build/Build.version').read_text())
-    if [version[k] for k in ('MajorVersion','MinorVersion','PatchVersion')]!=[5,8,1]:raise ValueError('Expected UE 5.8.1')
+    if '.'.join(str(version[k]) for k in ('MajorVersion','MinorVersion','PatchVersion'))!=ENGINE_VERSION:raise ValueError('Package engine version mismatch')
     for p in sorted((engine/'Binaries'/BIN).rglob('*')):
         if not p.is_file() or p.suffix in SKIP or generated_path(p,engine):continue
         wanted=p.suffix.lower() in ('.dll','.modules','.version','.ini','.json') if WIN else ('.so' in p.name or p.suffix in ('.modules','.version','.ini','.json'))
@@ -64,7 +66,9 @@ def stage(dest,engine,project,runtime,resume):
         for p in cef.parent.iterdir():
             if p.is_file() and 'license' in p.name.lower():copy(p,dest/'backend/Engine'/p.relative_to(engine))
         if shutil.which('strip'):subprocess.run(['strip','--strip-debug',str(dest/'backend/Engine'/cef.relative_to(engine))],check=True)
-    for name in ('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource'):
+    plugins=('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource')
+    if ENGINE_VERSION=='5.9.0':plugins+=('Cascade',)
+    for name in plugins:
         descriptor=next(engine.glob('Plugins/**/'+name+'.uplugin'));plugin=descriptor.parent
         for folder in ('Binaries/'+BIN,'Config','Content','Resources','Shaders'):
             if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder,
@@ -124,7 +128,7 @@ def seal(dest,make_archive,private_roots):
         if not WIN and identity in inodes:record['hardlinkTo']=inodes[identity]
         else:inodes[identity]=rel;stored_bytes+=len(data)
         records.append(record)
-    manifest={'schema':'ue-niagara-standalone/1','engine':'UE5.8.1','platform':PLATFORM,
+    manifest={'schema':'ue-niagara-standalone/1','engine':'UE'+ENGINE_VERSION,'platform':PLATFORM,
               'editorInstallationRequired':False,'includesUnrealEd':True,'includesNiagaraEditor':True,
               'cppSdkRequired':False,'runtimeWithEditor':False,'payloadBytes':sum(r['bytes'] for r in records),
               'storedPayloadBytes':stored_bytes,'hardlinkedFiles':sum('hardlinkTo' in r for r in records),'records':records}

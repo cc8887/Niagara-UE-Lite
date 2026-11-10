@@ -35,7 +35,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--engine',required=True,type=Path)
     p.add_argument('--apply',action='store_true');p.add_argument('--report',type=Path);a=p.parse_args()
     engine=a.engine.resolve();v=json.loads((engine/'Build/Build.version').read_text())
-    if [v[k] for k in ('MajorVersion','MinorVersion','PatchVersion')]!=[5,8,1]:raise ValueError('Matching UE 5.8.1 required')
+    if tuple(v[k] for k in ('MajorVersion','MinorVersion','PatchVersion')) not in ((5,8,1),(5,9,0)):raise ValueError('Matching UE 5.8.1 or 5.9.0 required')
     content=changes(engine);rows=[]
     if a.apply and any((engine/r).stat().st_nlink>1 for r in content):raise ValueError('Use independent source copies')
     for relative,text in content.items():

@@ -71,7 +71,7 @@ def execute(q):
                     if src.exists():shutil.copyfile(src,dst);copied.append(dst)
                 ue.AssetRegistryHelpers.get_asset_registry().scan_files_synchronous([str(target_file)],True)
                 obj=ue.load_asset(target)
-                if not isinstance(obj,ue.Texture2D):raise ValueError('Expected compatible uncooked UE 5.8.1 Texture2D')
+                if not isinstance(obj,ue.Texture2D):raise ValueError('Expected compatible uncooked Texture2D for this engine version')
             except Exception:
                 for copied_file in copied:copied_file.unlink()
                 raise

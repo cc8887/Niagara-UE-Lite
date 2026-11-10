@@ -34,8 +34,25 @@ def changes(engine):
 \t\t}
 \t\tENiagaraScriptUsage Usage;
 \t\tif (!ScriptUsageFromName(FName(*UsageName), Usage))'''
-        if block.count(before)!=1 or block.count('FindScriptGroup(Usage, FGuid())')!=2:raise ValueError('External script resolver changed')
-        block=block.replace(before,after).replace('FindScriptGroup(Usage, FGuid())','FindScriptGroup(Usage, RequestedUsageId)')
+        if block.count(before)==1 and block.count('FindScriptGroup(Usage, FGuid())')==2:
+            block=block.replace(before,after).replace('FindScriptGroup(Usage, FGuid())','FindScriptGroup(Usage, RequestedUsageId)')
+        else:
+            # UE 5.9 also supports an explicit SimulationStage pointer. Preserve
+            # that validation and add qualified-name identity for event stacks.
+            before59='\t\tENiagaraScriptUsage Usage = ENiagaraScriptUsage::ParticleSimulationStageScript;\n\t\tif (ScriptName != NAME_None && !ScriptUsageFromName(ScriptName, Usage))'
+            after59=after[:after.index('\t\tENiagaraScriptUsage Usage;')]+'''\t\tENiagaraScriptUsage Usage = ENiagaraScriptUsage::ParticleSimulationStageScript;
+\t\tif (ScriptName != NAME_None && !ScriptUsageFromName(FName(*UsageName), Usage))'''
+            if block.count(before59)!=1 or block.count('\t\tFGuid UsageId;')!=1 or block.count('FindScriptGroup(Usage, UsageId)')!=2:
+                raise ValueError('External script resolver changed')
+            block=block.replace(before59,after59).replace('\t\tFGuid UsageId;','\t\tFGuid UsageId = RequestedUsageId;')
+            anchor='\t\t\tUsageId = SimulationStage->Script->GetUsageId();'
+            if block.count(anchor)!=1:raise ValueError('Simulation stage identity assignment changed')
+            block=block.replace(anchor,'''\t\t\tif (RequestedUsageId.IsValid() && RequestedUsageId != SimulationStage->Script->GetUsageId())
+\t\t\t{
+\t\t\t\tContext.Error(FText::FromString(TEXT("Conflicting simulation stage usage GUID")));
+\t\t\t\treturn nullptr;
+\t\t\t}
+'''+anchor)
         source=source[:start]+block+source[end:]
         before='\tNameFromScriptUsage(Script->GetScriptUsage(), ScriptName);'
         if source.count(before)!=1:raise ValueError('Native script reference setter changed')
@@ -52,7 +69,7 @@ def changes(engine):
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--engine',type=Path,required=True);p.add_argument('--apply',action='store_true');a=p.parse_args()
     engine=a.engine.resolve();v=json.loads((engine/'Build/Build.version').read_text())
-    if [v[k] for k in ('MajorVersion','MinorVersion','PatchVersion')]!=[5,8,1]:p.error('UE 5.8.1 required')
+    if tuple(v[k] for k in ('MajorVersion','MinorVersion','PatchVersion')) not in ((5,8,1),(5,9,0)):p.error('UE 5.8.1 or 5.9.0 required')
     content=changes(engine)
     if a.apply:
         for rel,text in content.items():

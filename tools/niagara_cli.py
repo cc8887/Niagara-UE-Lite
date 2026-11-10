@@ -24,6 +24,9 @@ EXT='.exe' if WIN else ''
 DEMOS={'fountain':'fountain.json','gpu':'gpu-fountain.json',
        'ribbon':'ribbon-beam.json','mesh':'mesh-fountain.json'}
 ENGINE=Path(os.environ.get('NIAGARA_LITE_ENGINE',ROOT/'backend/Engine'))
+def engine_version():
+    version=json.loads((ENGINE/'Build/Build.version').read_text(encoding='utf-8-sig'))
+    return '.'.join(str(version[k]) for k in ('MajorVersion','MinorVersion','PatchVersion'))
 ASSET=re.compile(r'/Game/(?:[A-Za-z_][A-Za-z0-9_]*/)*[A-Za-z_][A-Za-z0-9_]*')
 
 class BackendFailure(RuntimeError):
@@ -218,7 +221,7 @@ def cook(path,project,system,output,timeout,include=()):
     code,_=run([unrealpak,project,new,'-Create='+str(response),'-compress',*common()],path,env_for(path),state/(token+'-pak.log'),timeout)
     if code:raise RuntimeError('Native Pak creation failed')
     os.replace(new,target)
-    manifest={'schema':'niagara-runtime-package/1','engine':'5.8.1','platform':PLATFORM,'system':system,
+    manifest={'schema':'niagara-runtime-package/1','engine':engine_version(),'platform':PLATFORM,'system':system,
               'requestedPackages':roots,'cookScope':'requested packages and native dependency closure',
               'withEditor':False,'runtimeCompilation':False,'files':[]}
     for p in sorted(output.rglob('*')):
@@ -300,7 +303,7 @@ def main():
                      'nativeData':'per-object current-build archive; properties are explicit text overlays; resource assets are checked attachments'},
         'execution':'UE native compiler and runtime; no standalone replacement VM',
         'nativePython':'Explicit script file using bundled unreal API; script owns save/transaction boundaries'}
-    if args.command=='capabilities':return {'ok':True,'engine':'5.8.1','platform':PLATFORM,'nativeNiagara':True,
+    if args.command=='capabilities':return {'ok':True,'engine':engine_version(),'platform':PLATFORM,'nativeNiagara':True,
         'headlessEditorBundled':True,'withUnrealEd':True,'previewWithEditor':False,'create':'empty assets with optional existing-asset reuse',
         'emptyEmitterCreation':True,'emitterTemplatesRequired':False,'assignmentModules':True,
         'materialAuthoring':False,'existingMaterialBinding':True,'textureImport':True,
