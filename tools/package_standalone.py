@@ -61,11 +61,12 @@ def stage(dest,engine,project,runtime,resume):
                 copy(p,dest/'backend/Engine'/p.relative_to(engine))
     else:
         linked=subprocess.check_output(['ldd',str(engine/'Binaries/Linux/UnrealEditor-Cmd')],text=True)
-        cef=next(Path(x.split('=>')[1].split(' (')[0].strip()) for x in linked.splitlines() if 'libcef.so =>' in x)
-        copy(cef,dest/'backend/Engine'/cef.relative_to(engine))
-        for p in cef.parent.iterdir():
-            if p.is_file() and 'license' in p.name.lower():copy(p,dest/'backend/Engine'/p.relative_to(engine))
-        if shutil.which('strip'):subprocess.run(['strip','--strip-debug',str(dest/'backend/Engine'/cef.relative_to(engine))],check=True)
+        cef=next((Path(x.split('=>')[1].split(' (')[0].strip()) for x in linked.splitlines() if 'libcef.so =>' in x),None)
+        if cef is not None:
+            copy(cef,dest/'backend/Engine'/cef.relative_to(engine))
+            for p in cef.parent.iterdir():
+                if p.is_file() and 'license' in p.name.lower():copy(p,dest/'backend/Engine'/p.relative_to(engine))
+            if shutil.which('strip'):subprocess.run(['strip','--strip-debug',str(dest/'backend/Engine'/cef.relative_to(engine))],check=True)
     plugins=('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource')
     if ENGINE_VERSION=='5.9.0':plugins+=('Cascade','SequencerScripting')
     for name in plugins:

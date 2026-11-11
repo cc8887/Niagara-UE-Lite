@@ -1,4 +1,4 @@
-"""Offline UE 5.8.1 fix for UnrealPak's Windows-only extraction separator."""
+"""Offline UE 5.8.1/5.9.0 fix for UnrealPak's Windows-only extraction separator."""
 from pathlib import Path
 import argparse
 import json
@@ -11,8 +11,8 @@ def main():
     args=parser.parse_args()
     engine=Path(os.environ['NIAGARA_BUILD_ENGINE'])
     version=json.loads((engine/'Build/Build.version').read_text())
-    if tuple(version[k] for k in ('MajorVersion','MinorVersion','PatchVersion'))!=(5,8,1):
-        raise SystemExit('This extraction patch is qualified for UE 5.8.1 only')
+    if tuple(version[k] for k in ('MajorVersion','MinorVersion','PatchVersion')) not in ((5,8,1),(5,9,0)):
+        raise SystemExit('Matching UE 5.8.1 or 5.9.0 required')
     source=engine/'Source/Developer/PakFileUtilities/Private/PakFileUtilities.cpp'
     old='FString PakFilename = PakFileDirectory + "\\\\" + PakFileList[PakFileIndex];'
     new='FString PakFilename = FPaths::Combine(PakFileDirectory, PakFileList[PakFileIndex]);'

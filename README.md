@@ -21,7 +21,7 @@ preview.7 以通用原生编辑操作为入口：AI 可以从空 System 或独�
 双平台独立包及校验文件发布在
 [preview.7 Release](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.1.0-preview.7)。
 另提供匹配 UE 5.9.0 Preview 的
-[Windows 包](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.2.0-ue5.9-preview.1)；
+[Windows / Linux 包](https://github.com/cc8887/Niagara-UE-Lite/releases/tag/v0.2.0-ue5.9-preview.1)；
 版本、构建和兼容边界见 [ue59.md](docs/ue59.md)。不同引擎构建的 JSON 原生扩展和 DDC 不可混用。
 仓库保持私有；可执行文件、缓存和压缩包通过 Release 附件分发。
 
