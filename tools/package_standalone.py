@@ -67,13 +67,19 @@ def stage(dest,engine,project,runtime,resume):
             if p.is_file() and 'license' in p.name.lower():copy(p,dest/'backend/Engine'/p.relative_to(engine))
         if shutil.which('strip'):subprocess.run(['strip','--strip-debug',str(dest/'backend/Engine'/cef.relative_to(engine))],check=True)
     plugins=('Niagara','PythonScriptPlugin','ContentBrowserFileDataSource')
-    if ENGINE_VERSION=='5.9.0':plugins+=('Cascade',)
+    if ENGINE_VERSION=='5.9.0':plugins+=('Cascade','SequencerScripting')
     for name in plugins:
         descriptor=next(engine.glob('Plugins/**/'+name+'.uplugin'));plugin=descriptor.parent
         for folder in ('Binaries/'+BIN,'Config','Content','Resources','Shaders'):
-            if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder,
-                ('DefaultAssets/Templates/',) if name=='Niagara' and folder=='Content' else ())
+            excluded=('DefaultAssets/Templates/',) if name=='Niagara' and folder=='Content' else ()
+            if ENGINE_VERSION=='5.9.0' and folder=='Binaries/'+BIN and name in ('Cascade','SequencerScripting'):
+                excluded=('UnrealEditor-CascadeEditor.dll','UnrealEditor-SequencerScriptingEditor.dll') if WIN else ('libUnrealEditor-CascadeEditor.so','libUnrealEditor-SequencerScriptingEditor.so')
+            if (plugin/folder).is_dir():tree(plugin/folder,dest/'backend/Engine'/plugin.relative_to(engine)/folder,excluded)
         copy(descriptor,dest/'backend/Engine'/descriptor.relative_to(engine))
+        if ENGINE_VERSION=='5.9.0' and name in ('Cascade','SequencerScripting'):
+            for metadata in (dest/'backend/Engine'/plugin.relative_to(engine)/'Binaries'/BIN).glob('*.modules'):
+                data=json.loads(metadata.read_text());data['Modules']={n:f for n,f in data.get('Modules',{}).items() if (metadata.parent/f).is_file()}
+                metadata.write_text(json.dumps(data,indent=2)+'\n')
     config=engine/'Platforms'/PLATFORM/'Config'
     if config.is_dir():tree(config,dest/'backend/Engine'/config.relative_to(engine))
     copy(project/'NiagaraStandalone.uproject',dest/'Project/NiagaraStandalone.uproject')

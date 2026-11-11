@@ -22,12 +22,24 @@ def changes(engine,project):
         raise ValueError('Unexpected Cascade plugin dependency')
     plugin['Modules']=[m for m in plugin['Modules'] if m['Name']!='CascadeEditor']
     plugin['Plugins']=[]
+    scripting=engine/'Plugins/MovieScene/SequencerScripting/SequencerScripting.uplugin'
+    text=scripting.read_text()
+    # The matching stock descriptor has a trailing comma in its Plugins list;
+    # UE accepts it, while Python's strict JSON parser does not.
+    try:script_plugin=json.loads(text)
+    except json.JSONDecodeError:
+        if text.count('},\n\t],')!=1:raise ValueError('SequencerScripting descriptor syntax changed')
+        script_plugin=json.loads(text.replace('},\n\t],','}\n\t],'))
+    if {m['Name'] for m in script_plugin['Modules']} not in ({'SequencerScripting','SequencerScriptingEditor'},{'SequencerScripting'}):
+        raise ValueError('SequencerScripting module layout changed')
+    script_plugin['Modules']=[m for m in script_plugin['Modules'] if m['Name']=='SequencerScripting']
     data=json.loads(project.read_text())
-    existing=[p for p in data['Plugins'] if p['Name']=='Cascade']
-    reference={'Name':'Cascade','Enabled':True,'TargetAllowList':['Editor']}
-    if existing and existing!=[reference]:raise ValueError('Conflicting Cascade project reference')
-    if not existing:data['Plugins'].append(reference)
-    return {descriptor:plugin,project:data}
+    for name in ('Cascade','SequencerScripting'):
+        existing=[p for p in data['Plugins'] if p['Name']==name]
+        reference={'Name':name,'Enabled':True,'TargetAllowList':['Editor']}
+        if existing and existing!=[reference]:raise ValueError('Conflicting project reference: '+name)
+        if not existing:data['Plugins'].append(reference)
+    return {descriptor:plugin,scripting:script_plugin,project:data}
 
 
 def writable(path):
